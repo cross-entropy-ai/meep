@@ -1,5 +1,5 @@
 import Foundation
-import os
+import Synchronization
 
 /// Command-line interface (usage: HelpText in Agent.swift).
 /// stdout carries only results (a path, or JSON); diagnostics and progress go to stderr.
@@ -282,7 +282,7 @@ enum CLI {
     }
 
     /// The progress line currently on stderr (nil = none). Progress can come from any thread.
-    private static let progressLine = OSAllocatedUnfairLock<String?>(initialState: nil)
+    private static let progressLine = Mutex<String?>(nil)
 
     /// "label 42%" on stderr, redrawn in place; only when stderr is a terminal.
     static func progress(_ label: String) -> @Sendable (Double) -> Void {
