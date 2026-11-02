@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build a minimal, LGPL-only, static ffmpeg (arm64, macOS 14.2+) into vendor/ffmpeg/bin/ffmpeg.
+# Build a minimal, LGPL-only, static ffmpeg (arm64, macOS 15.0+) into vendor/ffmpeg/bin/ffmpeg.
 # build.sh copies it into MeetingRecorder.app/Contents/Helpers/ffmpeg.
 # Source: https://git.ffmpeg.org/ffmpeg.git (release tag, override with FFMPEG_REF)
 # Needs: Xcode Command Line Tools only (no nasm on arm64, no pkg-config, no external libraries).
@@ -27,7 +27,7 @@ elif [ "$(git -C "$SRC" rev-parse HEAD)" != "$(git -C "$SRC" rev-parse -q --veri
 fi
 
 # Match the app's minimum macOS (Info.plist LSMinimumSystemVersion / build.sh -target).
-export MACOSX_DEPLOYMENT_TARGET=14.2
+export MACOSX_DEPLOYMENT_TARGET=15.0
 FLAGS="-arch arm64 -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
 
 CONFIGURE=(
