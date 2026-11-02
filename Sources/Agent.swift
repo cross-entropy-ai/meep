@@ -168,7 +168,7 @@ enum HelpText {
                              noise suppression, auto level (what ran: mic_processing in session.json)
           raw/session.json   status, timing, interruptions, warnings, after_save
           All tracks start at the same moment: sample N of every file is the same instant.
-          Folder: $MEETINGRECORDER_ROOT, else
+          Folder: $MEETINGRECORDER_ROOT, else Preferences › General › Recordings Folder, i.e.
             defaults write com.junyi.MeetingRecorder recordingsFolder -string <path>
           (the app reads the defaults key; the environment variable only affects this process).
 

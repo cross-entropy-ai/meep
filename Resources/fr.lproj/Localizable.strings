@@ -74,8 +74,6 @@
 "About" = "À propos";
 "Off" = "Désactivée";
 "Apple Voice Processing" = "Traitement vocal Apple";
-"Real-time, but lowers other apps' volume." = "En temps réel, mais baisse le volume des autres apps.";
-"Processed after stopping, better quality." = "Traité après l'arrêt, meilleure qualité.";
 "Microphone" = "Micro";
 "System Audio" = "Audio du système";
 "No input device" = "Aucun périphérique d'entrée";
@@ -101,3 +99,15 @@
 "Very High" = "Très élevée";
 "Handled by Apple Voice Processing." = "Pris en charge par le traitement vocal d'Apple.";
 "Microphone processing failed (the mix uses the raw mic track): " = "Échec du traitement du micro (le mixage utilise la piste micro brute) : ";
+"Restore Defaults" = "Rétablir les réglages par défaut";
+"Removes the speaker sound your microphone picks up. Not needed with headphones." = "Supprime le son des haut-parleurs capté par le micro. Inutile avec un casque.";
+"WebRTC: better quality. Apple: works live, but turns other apps down." = "WebRTC : meilleure qualité. Apple : en direct, mais baisse le volume des autres apps.";
+"Removes steady background noise, like fans or air conditioning." = "Supprime le bruit de fond continu, comme un ventilateur ou la climatisation.";
+"Higher levels remove more, but your voice may sound muffled. Low is fine for most rooms." = "Plus le niveau est élevé, plus le bruit disparaît, mais la voix peut sembler étouffée. « Faible » suffit dans la plupart des pièces.";
+"Keeps your voice at a steady volume." = "Garde votre voix à un volume stable.";
+"Background noise gets louder too. Leave it off if your volume is already fine." = "Le bruit de fond augmente aussi. Laissez désactivé si le volume vous convient déjà.";
+"Change…" = "Modifier…";
+"Choose" = "Choisir";
+"Choose where to save recordings." = "Choisissez où enregistrer les enregistrements.";
+"Can't save to %@: no write permission." = "Impossible d’enregistrer dans %@ : pas d’autorisation d’écriture.";
+"Set by MEETINGRECORDER_ROOT." = "Défini par MEETINGRECORDER_ROOT.";

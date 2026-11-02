@@ -68,7 +68,7 @@ Exit codes: `0` ok, `1` failed, `2` bad usage, `3` timed out. `$mr help` lists e
 
 **Run After Saving** (Preferences › Agent) runs a command of your choice after each recording, e.g. a transcription script, with the recording folder as `$1`. Its progress and exit status appear in `raw/session.json` under `after_save`.
 
-To save recordings somewhere else:
+To save recordings somewhere else, use Preferences › General › Recordings Folder › Change…, or:
 
 ```bash
 defaults write com.junyi.MeetingRecorder recordingsFolder -string ~/Meetings

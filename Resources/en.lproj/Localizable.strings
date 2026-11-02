@@ -74,8 +74,6 @@
 "About" = "About";
 "Off" = "Off";
 "Apple Voice Processing" = "Apple Voice Processing";
-"Real-time, but lowers other apps' volume." = "Real-time, but lowers other apps' volume.";
-"Processed after stopping, better quality." = "Processed after stopping, better quality.";
 "Microphone" = "Microphone";
 "System Audio" = "System Audio";
 "No input device" = "No input device";
@@ -101,3 +99,15 @@
 "Very High" = "Very High";
 "Handled by Apple Voice Processing." = "Handled by Apple Voice Processing.";
 "Microphone processing failed (the mix uses the raw mic track): " = "Microphone processing failed (the mix uses the raw mic track): ";
+"Restore Defaults" = "Restore Defaults";
+"Removes the speaker sound your microphone picks up. Not needed with headphones." = "Removes the speaker sound your microphone picks up. Not needed with headphones.";
+"WebRTC: better quality. Apple: works live, but turns other apps down." = "WebRTC: better quality. Apple: works live, but turns other apps down.";
+"Removes steady background noise, like fans or air conditioning." = "Removes steady background noise, like fans or air conditioning.";
+"Higher levels remove more, but your voice may sound muffled. Low is fine for most rooms." = "Higher levels remove more, but your voice may sound muffled. Low is fine for most rooms.";
+"Keeps your voice at a steady volume." = "Keeps your voice at a steady volume.";
+"Background noise gets louder too. Leave it off if your volume is already fine." = "Background noise gets louder too. Leave it off if your volume is already fine.";
+"Change…" = "Change…";
+"Choose" = "Choose";
+"Choose where to save recordings." = "Choose where to save recordings.";
+"Can't save to %@: no write permission." = "Can't save to %@: no write permission.";
+"Set by MEETINGRECORDER_ROOT." = "Set by MEETINGRECORDER_ROOT.";

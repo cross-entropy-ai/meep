@@ -74,8 +74,6 @@
 "About" = "情報";
 "Off" = "オフ";
 "Apple Voice Processing" = "Apple 音声処理";
-"Real-time, but lowers other apps' volume." = "リアルタイムで処理しますが、他のアプリの音量が下がります。";
-"Processed after stopping, better quality." = "停止後に処理し、品質が高くなります。";
 "Microphone" = "マイク";
 "System Audio" = "システムオーディオ";
 "No input device" = "入力デバイスがありません";
@@ -101,3 +99,15 @@
 "Very High" = "最高";
 "Handled by Apple Voice Processing." = "Apple 音声処理が担当します。";
 "Microphone processing failed (the mix uses the raw mic track): " = "マイクの処理に失敗しました（ミックスには元のマイク音声を使用）：";
+"Restore Defaults" = "デフォルトに戻す";
+"Removes the speaker sound your microphone picks up. Not needed with headphones." = "マイクが拾ったスピーカーの音を取り除きます。ヘッドホンなら不要です。";
+"WebRTC: better quality. Apple: works live, but turns other apps down." = "WebRTC：高品質。Apple：リアルタイムで処理しますが、ほかのアプリの音量が下がります。";
+"Removes steady background noise, like fans or air conditioning." = "ファンやエアコンなど、一定の背景ノイズを取り除きます。";
+"Higher levels remove more, but your voice may sound muffled. Low is fine for most rooms." = "レベルが高いほど多く取り除きますが、声がこもることがあります。ほとんどの部屋は「低」で十分です。";
+"Keeps your voice at a steady volume." = "声の音量を一定に保ちます。";
+"Background noise gets louder too. Leave it off if your volume is already fine." = "背景ノイズも大きくなります。音量に問題がなければオフのままにしてください。";
+"Change…" = "変更…";
+"Choose" = "選択";
+"Choose where to save recordings." = "録音の保存先を選択してください。";
+"Can't save to %@: no write permission." = "%@ に保存できません：書き込み権限がありません。";
+"Set by MEETINGRECORDER_ROOT." = "MEETINGRECORDER_ROOT で指定されています。";

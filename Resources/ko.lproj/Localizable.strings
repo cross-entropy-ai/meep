@@ -74,8 +74,6 @@
 "About" = "정보";
 "Off" = "끔";
 "Apple Voice Processing" = "Apple 음성 처리";
-"Real-time, but lowers other apps' volume." = "실시간으로 처리하지만 다른 앱의 음량이 낮아집니다.";
-"Processed after stopping, better quality." = "중지 후 처리하며 품질이 더 좋습니다.";
 "Microphone" = "마이크";
 "System Audio" = "시스템 오디오";
 "No input device" = "입력 기기 없음";
@@ -101,3 +99,15 @@
 "Very High" = "매우 높음";
 "Handled by Apple Voice Processing." = "Apple 음성 처리가 담당합니다.";
 "Microphone processing failed (the mix uses the raw mic track): " = "마이크 처리 실패(믹스에는 원본 마이크 트랙 사용): ";
+"Restore Defaults" = "기본값으로 복원";
+"Removes the speaker sound your microphone picks up. Not needed with headphones." = "마이크에 들어온 스피커 소리를 없앱니다. 헤드폰을 쓰면 필요 없습니다.";
+"WebRTC: better quality. Apple: works live, but turns other apps down." = "WebRTC: 품질이 더 좋습니다. Apple: 실시간으로 처리하지만 다른 앱 음량을 낮춥니다.";
+"Removes steady background noise, like fans or air conditioning." = "팬이나 에어컨 같은 지속적인 배경 소음을 없앱니다.";
+"Higher levels remove more, but your voice may sound muffled. Low is fine for most rooms." = "단계가 높을수록 더 많이 없애지만 목소리가 답답해질 수 있습니다. 대부분은 ‘낮음’이면 충분합니다.";
+"Keeps your voice at a steady volume." = "목소리 크기를 일정하게 유지합니다.";
+"Background noise gets louder too. Leave it off if your volume is already fine." = "배경 소음도 커집니다. 음량이 이미 괜찮다면 꺼 두세요.";
+"Change…" = "변경…";
+"Choose" = "선택";
+"Choose where to save recordings." = "녹음을 저장할 위치를 선택하세요.";
+"Can't save to %@: no write permission." = "%@에 저장할 수 없습니다: 쓰기 권한이 없습니다.";
+"Set by MEETINGRECORDER_ROOT." = "MEETINGRECORDER_ROOT로 지정되어 있습니다.";

@@ -62,6 +62,43 @@ final class AppState {
 
     // MARK: Input level meter
 
+    // MARK: Recordings folder
+
+    /// Shown in General › Saving; kept here so the view updates when it changes.
+    var recordingsFolder = RecordingSession.rootDirectory
+    var recordingsFolderError: String?
+
+    /// Lets the user pick the folder new recordings are saved in. A recording in progress stays
+    /// where it is (the button is disabled meanwhile).
+    func chooseRecordingsFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = recordingsFolder
+        panel.prompt = tr("Choose")
+        panel.message = tr("Choose where to save recordings.")
+        let apply: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+            guard let self, response == .OK, let url = panel.url else { return }
+            guard FileManager.default.isWritableFile(atPath: url.path) else {
+                self.recordingsFolderError = tr("Can't save to %@: no write permission.", abbreviate(url.path))
+                return
+            }
+            AppSettings.setRecordingsFolder(url)
+            self.recordingsFolder = RecordingSession.rootDirectory
+            self.recordingsFolderError = nil
+        }
+        if let window = NSApp.keyWindow {
+            panel.beginSheetModal(for: window) { r in MainActor.assumeIsolated { apply(r) } }
+        } else {
+            apply(panel.runModal())
+        }
+    }
+
+    /// Which help popover is open (views keep no @State, see above); nil = none.
+    var helpShown: String?
+
     /// Displayed input level, 0...1 (-60...0 dBFS, falls back slowly).
     var inputLevel: Float = 0
     @ObservationIgnored private var meter: InputLevelMeter?
@@ -301,21 +338,38 @@ struct GeneralPreferencesView: View {
             Section(tr("Saving")) {
                 Toggle(tr("Open Folder After Saving"), isOn: $openFolderAfterSaving)
                 LabeledContent {
-                    Button(tr("Show in Finder")) {
-                        let root = RecordingSession.rootDirectory
-                        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-                        NSWorkspace.shared.open(root)
+                    HStack {
+                        Button(tr("Change…"), action: state.chooseRecordingsFolder)
+                            .disabled(state.isRecording || AppSettings.recordingsFolderFromEnvironment)
+                        Button(tr("Show in Finder")) {
+                            let root = RecordingSession.rootDirectory
+                            try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+                            NSWorkspace.shared.open(root)
+                        }
                     }
                 } label: {
                     Text(tr("Recordings Folder"))
-                    Text(abbreviate(RecordingSession.rootDirectory.path))  // rendered as a subtitle
+                    Text(abbreviate(state.recordingsFolder.path))  // rendered as a subtitle
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(abbreviate(state.recordingsFolder.path))
+                }
+                if let e = state.recordingsFolderError {
+                    Text(e).font(.caption).foregroundStyle(.red)
+                } else if AppSettings.recordingsFolderFromEnvironment {
+                    Text(tr("Set by MEETINGRECORDER_ROOT.")).font(.caption).foregroundStyle(.secondary)
+                } else if state.isRecording {
+                    Text(tr("Can't change while recording.")).font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
         .formStyle(.grouped)
         .frame(width: 500)
         .fixedSize()
-        .onAppear { state.launchAtLogin = AppSettings.launchAtLogin }
+        .onAppear {
+            state.launchAtLogin = AppSettings.launchAtLogin
+            state.recordingsFolder = RecordingSession.rootDirectory  // may be set with `defaults`
+        }
         .onDisappear { if state.isCapturingHotKey { state.endHotKeyCapture() } }
         .onChange(of: language) { _, _ in state.onChange() }
         .onChange(of: showMenuBarIcon) { _, _ in state.onChange() }
@@ -365,33 +419,57 @@ struct AudioPreferencesView: View {
                 .disabled(state.isRecording)
             }
 
-            Section(tr("Post-Processing")) {
+            Section {
                 Picker(selection: $echoRaw) {
                     ForEach(EchoMode.allCases, id: \.rawValue) { Text($0.shortTitle).tag($0.rawValue) }
                 } label: {
-                    Text(tr("Echo Cancellation"))
+                    HStack(spacing: 6) {
+                        Text(tr("Echo Cancellation"))
+                        HelpButton(state: state, id: "echoCancellation", paragraphs: [
+                            tr("Removes the speaker sound your microphone picks up. Not needed with headphones."),
+                            tr("WebRTC: better quality. Apple: works live, but turns other apps down."),
+                        ])
+                    }
                     // Rendered as a subtitle.
                     if state.isRecording {
                         Text(tr("Can't change while recording."))
                     } else if !recordSystemAudio {
                         Text(tr("Needs system audio recording."))
-                    } else if let detail = (EchoMode(rawValue: echoRaw) ?? .webrtc).detail {
-                        Text(detail)
                     }
                 }
                 .disabled(state.isRecording || !recordSystemAudio)
                 Picker(selection: $noiseRaw) {
                     ForEach(NoiseSuppression.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) }
                 } label: {
-                    Text(tr("Noise Suppression"))
+                    HStack(spacing: 6) {
+                        Text(tr("Noise Suppression"))
+                        HelpButton(state: state, id: "noiseSuppression", paragraphs: [
+                            tr("Removes steady background noise, like fans or air conditioning."),
+                            tr("Higher levels remove more, but your voice may sound muffled. Low is fine for most rooms."),
+                        ])
+                    }
                     micProcessingNote
                 }
                 .disabled(state.isRecording || appleProcessesMic)
                 Toggle(isOn: $autoLevel) {
-                    Text(tr("Auto Level"))
+                    HStack(spacing: 6) {
+                        Text(tr("Auto Level"))
+                        HelpButton(state: state, id: "autoLevel", paragraphs: [
+                            tr("Keeps your voice at a steady volume."),
+                            tr("Background noise gets louder too. Leave it off if your volume is already fine."),
+                        ])
+                    }
                     micProcessingNote
                 }
                 .disabled(state.isRecording || appleProcessesMic)
+            } header: {
+                Text(tr("Post-Processing"))
+            } footer: {
+                HStack {
+                    Spacer()
+                    Button(tr("Restore Defaults"), action: restoreDefaults)
+                        .disabled(state.isRecording || isDefault)
+                }
             }
         }
         .formStyle(.grouped)
@@ -403,6 +481,20 @@ struct AudioPreferencesView: View {
         }
         .onDisappear { state.stopMeter() }
         .onChange(of: echoRaw) { _, _ in state.onChange() }
+    }
+
+    // Defaults of the settings on this tab (match the getters in AppSettings).
+    private var isDefault: Bool {
+        state.inputDeviceUID.isEmpty && recordSystemAudio && echoRaw == EchoMode.webrtc.rawValue
+            && noiseRaw == NoiseSuppression.low.rawValue && !autoLevel
+    }
+
+    private func restoreDefaults() {
+        if !state.inputDeviceUID.isEmpty { state.selectInputDevice("") }
+        recordSystemAudio = true
+        echoRaw = EchoMode.webrtc.rawValue
+        noiseRaw = NoiseSuppression.low.rawValue
+        autoLevel = false
     }
 
     /// Apple voice processing does its own noise suppression and gain; it runs with system audio
@@ -674,6 +766,32 @@ extension NoiseSuppression {
     }
 }
 
+/// A "?" button showing a popover: the first paragraph says what a setting does, the others
+/// (secondary) its costs and when to use it.
+struct HelpButton: View {
+    let state: AppState
+    let id: String
+    let paragraphs: [String]
+
+    var body: some View {
+        HelpLink { state.helpShown = state.helpShown == id ? nil : id }
+            .controlSize(.mini)
+            .popover(isPresented: Binding(get: { state.helpShown == id },
+                                          set: { if !$0, state.helpShown == id { state.helpShown = nil } }),
+                     arrowEdge: .trailing) {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(paragraphs.enumerated()), id: \.offset) { i, text in
+                        Text(text).foregroundStyle(i == 0 ? .primary : .secondary)
+                    }
+                }
+                .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(width: 300, alignment: .leading)
+                .padding(14)
+            }
+    }
+}
+
 struct InputLevelRow: View {
     let state: AppState
     var body: some View {
@@ -705,15 +823,6 @@ extension EchoMode {
         case .off: return tr("Off")
         case .apple: return tr("Apple Voice Processing")
         case .webrtc: return "WebRTC AEC3"
-        }
-    }
-
-    /// Subtitle under the picker; nil = none.
-    var detail: String? {
-        switch self {
-        case .off: return nil
-        case .apple: return tr("Real-time, but lowers other apps' volume.")
-        case .webrtc: return tr("Processed after stopping, better quality.")
         }
     }
 }

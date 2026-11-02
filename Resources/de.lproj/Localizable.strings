@@ -74,8 +74,6 @@
 "About" = "Über";
 "Off" = "Aus";
 "Apple Voice Processing" = "Apple-Sprachverarbeitung";
-"Real-time, but lowers other apps' volume." = "Echtzeit, senkt aber die Lautstärke anderer Apps.";
-"Processed after stopping, better quality." = "Wird nach dem Stoppen verarbeitet, bessere Qualität.";
 "Microphone" = "Mikrofon";
 "System Audio" = "Systemaudio";
 "No input device" = "Kein Eingabegerät";
@@ -101,3 +99,15 @@
 "Very High" = "Sehr hoch";
 "Handled by Apple Voice Processing." = "Wird von der Apple-Sprachverarbeitung übernommen.";
 "Microphone processing failed (the mix uses the raw mic track): " = "Mikrofonverarbeitung fehlgeschlagen (die Mischung nutzt die unbearbeitete Mikrofonspur): ";
+"Restore Defaults" = "Standard wiederherstellen";
+"Removes the speaker sound your microphone picks up. Not needed with headphones." = "Entfernt den Lautsprecherton, den dein Mikrofon aufnimmt. Mit Kopfhörern nicht nötig.";
+"WebRTC: better quality. Apple: works live, but turns other apps down." = "WebRTC: bessere Qualität. Apple: arbeitet live, macht andere Apps aber leiser.";
+"Removes steady background noise, like fans or air conditioning." = "Entfernt gleichmäßige Hintergrundgeräusche wie Lüfter oder Klimaanlage.";
+"Higher levels remove more, but your voice may sound muffled. Low is fine for most rooms." = "Höhere Stufen entfernen mehr, die Stimme kann aber dumpf klingen. „Niedrig“ reicht für die meisten Räume.";
+"Keeps your voice at a steady volume." = "Hält deine Stimme auf gleichmäßiger Lautstärke.";
+"Background noise gets louder too. Leave it off if your volume is already fine." = "Hintergrundgeräusche werden auch lauter. Lass es aus, wenn die Lautstärke schon passt.";
+"Change…" = "Ändern …";
+"Choose" = "Auswählen";
+"Choose where to save recordings." = "Wähle, wo Aufnahmen gespeichert werden.";
+"Can't save to %@: no write permission." = "Speichern in %@ nicht möglich: keine Schreibberechtigung.";
+"Set by MEETINGRECORDER_ROOT." = "Durch MEETINGRECORDER_ROOT festgelegt.";

@@ -74,8 +74,6 @@
 "About" = "关于";
 "Off" = "关闭";
 "Apple Voice Processing" = "Apple 语音处理";
-"Real-time, but lowers other apps' volume." = "实时处理，但会压低其他 app 的音量。";
-"Processed after stopping, better quality." = "停止后处理，效果更好。";
 "Microphone" = "麦克风";
 "System Audio" = "系统声音";
 "No input device" = "没有输入设备";
@@ -101,3 +99,15 @@
 "Very High" = "很高";
 "Handled by Apple Voice Processing." = "由 Apple 语音处理负责。";
 "Microphone processing failed (the mix uses the raw mic track): " = "麦克风处理失败（混音使用原始麦克风音轨）：";
+"Restore Defaults" = "恢复默认设置";
+"Removes the speaker sound your microphone picks up. Not needed with headphones." = "去掉麦克风收进来的扬声器声音。戴耳机时不需要。";
+"WebRTC: better quality. Apple: works live, but turns other apps down." = "WebRTC：效果更好。Apple：实时处理，但会调低其他应用的音量。";
+"Removes steady background noise, like fans or air conditioning." = "去掉持续的背景噪声，比如风扇、空调声。";
+"Higher levels remove more, but your voice may sound muffled. Low is fine for most rooms." = "档位越高去得越多，但人声可能发闷。大多数房间用「低」就够了。";
+"Keeps your voice at a steady volume." = "让你的音量保持平稳。";
+"Background noise gets louder too. Leave it off if your volume is already fine." = "背景噪声也会变大。如果音量本来就合适，保持关闭。";
+"Change…" = "更改…";
+"Choose" = "选择";
+"Choose where to save recordings." = "选择录音的保存位置。";
+"Can't save to %@: no write permission." = "无法保存到 %@：没有写入权限。";
+"Set by MEETINGRECORDER_ROOT." = "由 MEETINGRECORDER_ROOT 指定。";

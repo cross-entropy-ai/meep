@@ -27,8 +27,8 @@ enum AppSettings {
     private static var d: UserDefaults { .standard }
 
     /// Where recordings are saved: $MEETINGRECORDER_ROOT, else the `recordingsFolder` default
-    /// (a path, `~` expanded), else ~/Documents/MeetingRecordings. No UI; set it with
-    /// `defaults write com.junyi.MeetingRecorder recordingsFolder -string ~/Meetings`
+    /// (a path, `~` expanded), else ~/Documents/MeetingRecordings. Set in Preferences › General,
+    /// or `defaults write com.junyi.MeetingRecorder recordingsFolder -string ~/Meetings`
     static var recordingsFolder: URL {
         let candidates = [ProcessInfo.processInfo.environment["MEETINGRECORDER_ROOT"],
                           d.string(forKey: "recordingsFolder")]
@@ -38,6 +38,16 @@ enum AppSettings {
         }
         return FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Documents/MeetingRecordings", isDirectory: true)
+    }
+
+    /// $MEETINGRECORDER_ROOT wins over the setting, so Preferences can't change the folder then.
+    static var recordingsFolderFromEnvironment: Bool {
+        !(ProcessInfo.processInfo.environment["MEETINGRECORDER_ROOT"] ?? "")
+            .trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    static func setRecordingsFolder(_ url: URL) {
+        d.set(url.standardizedFileURL.path, forKey: "recordingsFolder")
     }
 
     static var echoMode: EchoMode {
