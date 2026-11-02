@@ -31,8 +31,6 @@ jobs:
   release:
     runs-on: macos-26
     timeout-minutes: 60
-    env:
-      KEYCHAIN: ${{ runner.temp }}/signing.keychain-db
     steps:
       - uses: actions/checkout@v5
 
@@ -65,18 +63,18 @@ jobs:
           P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
         run: |
           pw=$(uuidgen)
-          security create-keychain -p "$pw" "$KEYCHAIN"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN"
-          security unlock-keychain -p "$pw" "$KEYCHAIN"
+          security create-keychain -p "$pw" "$RUNNER_TEMP/signing.keychain-db"
+          security set-keychain-settings -lut 21600 "$RUNNER_TEMP/signing.keychain-db"
+          security unlock-keychain -p "$pw" "$RUNNER_TEMP/signing.keychain-db"
           echo "$P12" | base64 --decode > "$RUNNER_TEMP/id.p12"
-          security import "$RUNNER_TEMP/id.p12" -k "$KEYCHAIN" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security import "$RUNNER_TEMP/id.p12" -k "$RUNNER_TEMP/signing.keychain-db" -P "$P12_PASSWORD" -T /usr/bin/codesign
           rm "$RUNNER_TEMP/id.p12"
           # Intermediate certificate, in case the runner image lacks it.
           curl -fsSL https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer -o "$RUNNER_TEMP/g2.cer"
-          security import "$RUNNER_TEMP/g2.cer" -k "$KEYCHAIN" || true
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$pw" "$KEYCHAIN" >/dev/null
-          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
-          security find-identity -v -p codesigning "$KEYCHAIN"
+          security import "$RUNNER_TEMP/g2.cer" -k "$RUNNER_TEMP/signing.keychain-db" || true
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$pw" "$RUNNER_TEMP/signing.keychain-db" >/dev/null
+          security list-keychains -d user -s "$RUNNER_TEMP/signing.keychain-db" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$RUNNER_TEMP/signing.keychain-db"
 
       - name: Build, sign and notarize
         env:
@@ -103,4 +101,4 @@ jobs:
 
       - name: Remove the signing keychain
         if: always()
-        run: security delete-keychain "$KEYCHAIN" || true
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
