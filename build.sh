@@ -38,10 +38,14 @@ swiftc -O -swift-version 6 \
   Sources/*.swift -o "$APP/Contents/MacOS/MeetingRecorder"
 
 # A stable signing identity keeps TCC permissions across rebuilds; fall back to ad-hoc.
+# Release builds: SIGN_IDENTITY="Developer ID Application: …" (see scripts/release.sh).
 IDENTITY="${SIGN_IDENTITY:-$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development/{print $2; exit}')}"
+# Hardened runtime always, so development builds behave like the notarized release.
+SIGN=(codesign --force --options runtime --sign "${IDENTITY:--}")
+[[ "$IDENTITY" == "Developer ID"* ]] && SIGN+=(--timestamp)
 # Nested code first: the app's signature seals the already-signed helper.
-codesign --force --sign "${IDENTITY:--}" "$APP/Contents/Helpers/ffmpeg"
-codesign --force --sign "${IDENTITY:--}" "$APP"
+"${SIGN[@]}" "$APP/Contents/Helpers/ffmpeg"
+"${SIGN[@]}" --entitlements MeetingRecorder.entitlements "$APP"
 echo "Built $APP (signed with: ${IDENTITY:-ad-hoc})"
 
 # Register with LaunchServices so `open meetingrecorder://…` resolves to this build.

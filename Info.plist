@@ -29,9 +29,9 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.6.0</string>
+    <string>1.0.0</string>
     <key>CFBundleVersion</key>
-    <string>7</string>
+    <string>8</string>
     <key>LSMinimumSystemVersion</key>
     <string>15.0</string>
     <key>NSHumanReadableCopyright</key>
@@ -43,7 +43,7 @@
     <string></string>
     <!-- "owner/repo": Check for Updates compares CFBundleShortVersionString with its latest GitHub release -->
     <key>MRUpdateGitHubRepo</key>
-    <string></string>
+    <string>cross-entropy-ai/agent-meetingrecorder</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>

@@ -411,6 +411,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 // MARK: - CLI (see CLI.swift; anything that is not a CLI invocation launches the menu bar app)
 
+// Run through a symlink (e.g. Homebrew's `meetingrecorder` in PATH), Bundle.main would be the
+// symlink's folder: no Info.plist, translations or ffmpeg. Re-exec the real binary inside the .app.
+if let exe = Bundle.main.executableURL?.standardizedFileURL,
+   case let real = exe.resolvingSymlinksInPath(), real.path != exe.path {
+    let argv = [real.path] + CommandLine.arguments.dropFirst()
+    var cArgs = argv.map { strdup($0) } + [nil]
+    execv(real.path, &cArgs)
+    perror("execv \(real.path)")
+    exit(1)
+}
+
 let cliArguments = Array(CommandLine.arguments.dropFirst())
 if CLI.isInvocation(cliArguments) { CLI.main(cliArguments) }
 

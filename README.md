@@ -20,17 +20,29 @@
 
 ## Install
 
-Requires macOS 15+ on Apple Silicon and the Xcode Command Line Tools.
+Requires macOS 15+ on Apple Silicon.
+
+```bash
+brew install --cask cross-entropy-ai/tap/meetingrecorder
+```
+
+This installs `MeetingRecorder.app` into `/Applications` and the `meetingrecorder` command (see [Automation](#automation)). Upgrade with `brew upgrade --cask meetingrecorder`, or download the zip from [Releases](https://github.com/cross-entropy-ai/agent-meetingrecorder/releases).
+
+The first time you record, macOS asks for **Microphone** and **System Audio Recording** access. Allow both.
+
+### Build from source
+
+Needs the Xcode Command Line Tools.
 
 ```bash
 brew install meson ninja
-git clone https://github.com/Junyi-99/agent-meetingrecorder.git
+git clone https://github.com/cross-entropy-ai/agent-meetingrecorder.git
 cd agent-meetingrecorder
 ./build.sh                      # the first build takes a few minutes (builds WebRTC and ffmpeg)
 open build/MeetingRecorder.app
 ```
 
-The first time you record, macOS asks for **Microphone** and **System Audio Recording** access. Allow both.
+`scripts/release.sh` builds the signed, notarized zip for a release.
 
 ## Use
 
@@ -52,7 +64,7 @@ Preferences (⌘,) let you change the hotkey, language and more. The Audio tab s
 The app binary doubles as a command-line tool:
 
 ```bash
-mr=/Applications/MeetingRecorder.app/Contents/MacOS/MeetingRecorder   # or build/MeetingRecorder.app/…
+mr=meetingrecorder     # installed by Homebrew; otherwise /Applications/MeetingRecorder.app/Contents/MacOS/MeetingRecorder
 
 dir=$($mr start --wait)          # starts recording (launching the app if needed), prints the folder;
                                  #   exit 1 with the reason if it can't start
