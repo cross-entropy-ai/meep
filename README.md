@@ -23,6 +23,7 @@
 Requires macOS 15+ on Apple Silicon.
 
 ```bash
+brew trust --cask cross-entropy-ai/tap/meep    # Homebrew asks you to trust casks from other taps once
 brew install --cask cross-entropy-ai/tap/meep
 ```
 
