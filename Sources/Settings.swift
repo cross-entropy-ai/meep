@@ -10,6 +10,20 @@ enum EchoMode: String, CaseIterable {
 enum AppSettings {
     private static let d = UserDefaults.standard
 
+    /// Where recordings are saved: $MEETINGRECORDER_ROOT, else the `recordingsFolder` default
+    /// (a path, `~` expanded), else ~/Documents/MeetingRecordings. No UI; set it with
+    /// `defaults write com.junyi.MeetingRecorder recordingsFolder -string ~/Meetings`
+    static var recordingsFolder: URL {
+        let candidates = [ProcessInfo.processInfo.environment["MEETINGRECORDER_ROOT"],
+                          d.string(forKey: "recordingsFolder")]
+        for case let p? in candidates where !p.trimmingCharacters(in: .whitespaces).isEmpty {
+            let path = (p as NSString).expandingTildeInPath
+            return URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
+        }
+        return FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Documents/MeetingRecordings", isDirectory: true)
+    }
+
     static var echoMode: EchoMode {
         get { d.string(forKey: "echoCancellation").flatMap(EchoMode.init(rawValue:)) ?? .webrtc }
         set { d.set(newValue.rawValue, forKey: "echoCancellation") }
