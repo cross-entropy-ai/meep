@@ -326,65 +326,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-// MARK: - CLI (see HelpText in Agent.swift)
+// MARK: - CLI (see CLI.swift; anything that is not a CLI invocation launches the menu bar app)
 
-func runCLI(_ body: () throws -> Void) -> Never {
-    do { try body(); exit(0) } catch {
-        FileHandle.standardError.write("error: \(error)\n".data(using: .utf8)!)
-        exit(1)
-    }
-}
-
-let cli = CommandLine.arguments
-if cli.count >= 2 && ["--help", "-h", "help"].contains(cli[1]) {
-    print(HelpText.text)
-    exit(0)
-}
-if cli.count >= 2 && cli[1] == "--status" {
-    print(StatusReport.json())
-    exit(0)
-}
-if cli.count >= 3 && cli[1] == "--login-item" {
-    runCLI {
-        if cli[2] != "status" { try AppSettings.setLaunchAtLogin(cli[2] == "on") }
-        print("launch at login: \(AppSettings.launchAtLogin ? "on" : "off")")
-    }
-}
-if cli.count >= 3 && cli[1] == "--remix" {
-    runCLI {
-        let dir = URL(fileURLWithPath: cli[2], isDirectory: true)
-        let raw = Finalizer.rawDir(dir)
-        let mic = ["mic_aec.pcm.caf", "mic_aec.caf", "mic.caf"].map { raw.appendingPathComponent($0) }
-            .first { FileManager.default.fileExists(atPath: $0.path) } ?? raw.appendingPathComponent("mic.caf")
-        let r = try Mixer.mix(system: raw.appendingPathComponent("system.caf"), mic: mic,
-                              output: dir.appendingPathComponent("mixed.m4a"))
-        print("wrote \(dir.appendingPathComponent("mixed.m4a").path)  loudness LUFS: \(r.loudnessLUFS)  gain dB: \(r.gainsDB)")
-    }
-}
-if cli.count >= 3 && cli[1] == "--aec" {
-    runCLI {
-        let dir = URL(fileURLWithPath: cli[2], isDirectory: true)
-        let raw = Finalizer.rawDir(dir)
-        if cli.count >= 4 {
-            let out = URL(fileURLWithPath: cli[3])
-            try EchoCanceller.process(system: raw.appendingPathComponent("system.caf"),
-                                      mic: raw.appendingPathComponent("mic.caf"), output: out)
-            print("wrote \(out.path)")
-        } else {
-            // Default: the recording's own layout, lossless PCM first, then AAC raw/mic_aec.caf.
-            let pcm = raw.appendingPathComponent(Finalizer.micAECPCM), out = raw.appendingPathComponent("mic_aec.caf")
-            try EchoCanceller.process(system: raw.appendingPathComponent("system.caf"),
-                                      mic: raw.appendingPathComponent("mic.caf"), output: pcm)
-            try Finalizer.encodeAAC(pcm, to: out, bitRate: 64_000, progress: { _ in })
-            try? FileManager.default.removeItem(at: pcm)
-            print("wrote \(out.path)")
-        }
-    }
-}
-if cli.count >= 2 && cli[1].hasPrefix("--") {
-    FileHandle.standardError.write("unknown or incomplete option: \(cli.dropFirst().joined(separator: " "))\nsee --help\n".data(using: .utf8)!)
-    exit(2)
-}
+let cliArguments = Array(CommandLine.arguments.dropFirst())
+if CLI.isInvocation(cliArguments) { CLI.main(cliArguments) }
 
 let app = NSApplication.shared
 let delegate = AppDelegate()
