@@ -3,11 +3,16 @@ import Foundation
 /// Runs the user's "Run After Saving" command once a recording is finished.
 /// The command gets the recording folder as $1 and in $MEETINGRECORDER_DIR; it runs in a login
 /// shell (so PATH matches the user's terminal). Output goes to raw/after-save.log.
+/// Its state is recorded in session.json "after_save": {"command", "status": "running|done|failed",
+/// "started_at", "log", "pid"}, plus "exit_status" and "finished_at" once it ends.
 enum AfterSaveHook {
+    static let logName = "after-save.log"
+    private static let metaLock = NSLock()
+
     static func run(_ dir: URL) {
         let cmd = AppSettings.afterSaveCommand.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cmd.isEmpty else { return }
-        let log = Finalizer.rawDir(dir).appendingPathComponent("after-save.log")
+        let log = Finalizer.rawDir(dir).appendingPathComponent(logName)
         FileManager.default.createFile(atPath: log.path, contents: Data("$ \(cmd) \(dir.path)\n".utf8))
         let out = try? FileHandle(forWritingTo: log)
         out?.seekToEndOfFile()
@@ -25,10 +30,45 @@ enum AfterSaveHook {
         p.terminationHandler = { proc in
             out?.write(Data("\n[exit \(proc.terminationStatus)]\n".utf8))
             try? out?.close()
+            // Killed by a signal: report it the way a shell does (128 + signal).
+            let code = proc.terminationReason == .uncaughtSignal ? 128 + proc.terminationStatus : proc.terminationStatus
+            AfterSaveHook.update(dir) {
+                $0["status"] = code == 0 ? "done" : "failed"
+                $0["exit_status"] = code
+                $0["finished_at"] = AfterSaveHook.now()
+            }
         }
-        do { try p.run() } catch {
+        // Recorded before launch, so the "done" update can never be overwritten by "running".
+        update(dir) {
+            $0 = ["command": cmd, "status": "running", "started_at": now(),
+                  "log": "\(Finalizer.rawFolder)/\(logName)"]
+        }
+        do {
+            try p.run()
+            let pid = p.processIdentifier
+            update(dir) { if $0["status"] as? String == "running" { $0["pid"] = pid } }
+        } catch {
             out?.write(Data("failed to start: \(error)\n".utf8))
+            try? out?.close()
+            update(dir) {
+                $0["status"] = "failed"
+                $0["exit_status"] = NSNull()
+                $0["error"] = "failed to start: \(error)"
+                $0["finished_at"] = now()
+            }
         }
+    }
+
+    private static func now() -> String { ISO8601DateFormatter().string(from: Date()) }
+
+    /// Read-modify-write of session.json "after_save" (writeMeta replaces the file atomically).
+    private static func update(_ dir: URL, _ change: (inout [String: Any]) -> Void) {
+        metaLock.lock(); defer { metaLock.unlock() }
+        guard var meta = Finalizer.readMeta(dir) else { return }
+        var state = meta["after_save"] as? [String: Any] ?? [:]
+        change(&state)
+        meta["after_save"] = state
+        Finalizer.writeMeta(meta, to: dir)
     }
 }
 
@@ -57,6 +97,7 @@ enum StatusReport {
                     "status": status,
                     "started_at": meta["started_at"] ?? NSNull(),
                     "duration_sec": meta["duration_sec"] ?? NSNull(),
+                    "after_save": meta["after_save"] ?? NSNull(),
                 ]
             }
             if current != nil && latest != nil { break }
