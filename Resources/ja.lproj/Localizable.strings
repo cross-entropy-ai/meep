@@ -56,7 +56,6 @@
 "Open Folder After Saving" = "保存後にフォルダを開く";
 "Show in Finder" = "Finder で表示";
 "Recordings Folder" = "録音の保存先";
-"Agents and scripts can start and stop recording with the URLs below, check progress with the status command, and read the results from the recordings folder: mixed.m4a, plus the separate tracks and session.json in raw/." = "エージェントやスクリプトは、下の URL で録音を開始・停止し、status で進捗を確認し、録音フォルダから結果を読み取れます：mixed.m4a、および raw/ 内の個別トラックと session.json。";
 "Command Line" = "コマンドライン";
 "Run After Saving" = "保存後に実行";
 "A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEEP_DIR. Output goes to raw/after-save.log." = "録音を保存するたびに実行するシェルコマンド。録音フォルダは $1 と $MEEP_DIR で渡されます。出力は raw/after-save.log に書き込まれます。";

@@ -551,12 +551,6 @@ struct AgentPreferencesView: View {
 
     var body: some View {
         Form {
-            Section {
-                Text(tr("Agents and scripts can start and stop recording with the URLs below, check progress with the status command, and read the results from the recordings folder: mixed.m4a, plus the separate tracks and session.json in raw/."))
-                    .font(.callout).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
             Section("URL Scheme") {
                 ForEach(Self.urls, id: \.self) { url in
                     copyRow(url, copyText: "open \"\(url)\"")

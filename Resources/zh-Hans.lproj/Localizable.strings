@@ -56,7 +56,6 @@
 "Open Folder After Saving" = "保存后打开文件夹";
 "Show in Finder" = "在 Finder 中显示";
 "Recordings Folder" = "录音保存位置";
-"Agents and scripts can start and stop recording with the URLs below, check progress with the status command, and read the results from the recordings folder: mixed.m4a, plus the separate tracks and session.json in raw/." = "Agent 和脚本可以用下面的 URL 开始、停止录制，用 status 查询进度，再从录音文件夹读取结果：mixed.m4a，以及 raw/ 里的分轨和 session.json。";
 "Command Line" = "命令行";
 "Run After Saving" = "保存后运行";
 "A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEEP_DIR. Output goes to raw/after-save.log." = "每次录音保存后执行的 shell 命令。录音文件夹作为 $1 传入，也在 $MEEP_DIR 里。输出写入 raw/after-save.log。";

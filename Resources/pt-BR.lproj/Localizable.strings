@@ -56,7 +56,6 @@
 "Open Folder After Saving" = "Abrir pasta após salvar";
 "Show in Finder" = "Mostrar no Finder";
 "Recordings Folder" = "Pasta de gravações";
-"Agents and scripts can start and stop recording with the URLs below, check progress with the status command, and read the results from the recordings folder: mixed.m4a, plus the separate tracks and session.json in raw/." = "Agentes e scripts podem iniciar e parar a gravação com as URLs abaixo, verificar o progresso com status e ler os resultados na pasta de gravações: mixed.m4a, além das faixas separadas e do session.json em raw/.";
 "Command Line" = "Linha de comando";
 "Run After Saving" = "Executar após salvar";
 "A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEEP_DIR. Output goes to raw/after-save.log." = "Um comando de shell executado após salvar cada gravação. Ele recebe a pasta da gravação como $1 e em $MEEP_DIR. A saída vai para raw/after-save.log.";
