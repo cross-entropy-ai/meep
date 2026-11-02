@@ -28,17 +28,53 @@ enum NoiseSuppression: String, CaseIterable {
 enum AppSettings {
     private static var d: UserDefaults { .standard }
 
+    /// UserDefaults keys of the settings Preferences shows (also used by its @AppStorage).
+    enum Key {
+        static let echoCancellation = "echoCancellation"
+        static let recordSystemAudio = "recordSystemAudio"
+        static let noiseSuppression = "noiseSuppression"
+        static let autoLevel = "autoLevel"
+        static let showElapsedTime = "showElapsedTime"
+        static let showMenuBarIcon = "showMenuBarIcon"
+        static let language = "language"
+        static let afterSaveCommand = "afterSaveCommand"
+        static let openFolderAfterSaving = "openFolderAfterSaving"
+        static let recordingsFolder = "recordingsFolder"
+        static let inputDeviceUID = "inputDeviceUID"
+    }
+
+    /// Defaults of those settings (also Preferences › Audio › Restore Defaults).
+    enum Default {
+        static let echoMode = EchoMode.webrtc
+        static let recordSystemAudio = true
+        static let noiseSuppression = NoiseSuppression.low
+        static let autoLevel = false
+        static let showElapsedTime = true
+        static let showMenuBarIcon = true
+        static let afterSaveCommand = ""
+        static let openFolderAfterSaving = true
+    }
+
     /// Where recordings are saved: $MEETINGRECORDER_ROOT, else the `recordingsFolder` default
     /// (a path, `~` expanded), else ~/Documents/MeetingRecordings. Set in Preferences › General,
     /// or `defaults write com.junyi.MeetingRecorder recordingsFolder -string ~/Meetings`
     static var recordingsFolder: URL {
-        let candidates = [ProcessInfo.processInfo.environment["MEETINGRECORDER_ROOT"],
-                          d.string(forKey: "recordingsFolder")]
-        for case let p? in candidates where !p.trimmingCharacters(in: .whitespaces).isEmpty {
-            let path = (p as NSString).expandingTildeInPath
-            return URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
-        }
-        return FileManager.default.homeDirectoryForCurrentUser
+        folder(ProcessInfo.processInfo.environment["MEETINGRECORDER_ROOT"]) ?? appRecordingsFolder
+    }
+
+    /// The folder the app uses: the setting, else the default ($MEETINGRECORDER_ROOT never reaches
+    /// an app launched through LaunchServices).
+    static var appRecordingsFolder: URL {
+        folder(d.string(forKey: Key.recordingsFolder)) ?? defaultRecordingsFolder
+    }
+
+    private static func folder(_ path: String?) -> URL? {
+        guard let p = path, !p.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return URL(fileURLWithPath: (p as NSString).expandingTildeInPath, isDirectory: true).standardizedFileURL
+    }
+
+    static var defaultRecordingsFolder: URL {
+        FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Documents/MeetingRecordings", isDirectory: true)
     }
 
@@ -49,23 +85,23 @@ enum AppSettings {
     }
 
     static func setRecordingsFolder(_ url: URL) {
-        d.set(url.standardizedFileURL.path, forKey: "recordingsFolder")
+        d.set(url.standardizedFileURL.path, forKey: Key.recordingsFolder)
     }
 
     static var echoMode: EchoMode {
-        d.string(forKey: "echoCancellation").flatMap(EchoMode.init(rawValue:)) ?? .webrtc
+        d.string(forKey: Key.echoCancellation).flatMap(EchoMode.init(rawValue:)) ?? Default.echoMode
     }
 
     /// Record the system audio track (everything the Mac plays). Default on. Off = mic only.
     static var recordSystemAudio: Bool {
-        d.object(forKey: "recordSystemAudio") as? Bool ?? true
+        d.object(forKey: Key.recordSystemAudio) as? Bool ?? Default.recordSystemAudio
     }
 
     /// UID of the input device the mic track records; empty = the system default input.
     /// When the chosen device is not connected, the system default is recorded instead.
     static var inputDeviceUID: String {
-        get { d.string(forKey: "inputDeviceUID") ?? "" }
-        set { d.set(newValue, forKey: "inputDeviceUID") }
+        get { d.string(forKey: Key.inputDeviceUID) ?? "" }
+        set { d.set(newValue, forKey: Key.inputDeviceUID) }
     }
 
     /// Name of that device, to label it in Preferences while it is disconnected.
@@ -76,38 +112,38 @@ enum AppSettings {
 
     /// Mic noise suppression (default low).
     static var noiseSuppression: NoiseSuppression {
-        d.string(forKey: "noiseSuppression").flatMap(NoiseSuppression.init(rawValue:)) ?? .low
+        d.string(forKey: Key.noiseSuppression).flatMap(NoiseSuppression.init(rawValue:)) ?? Default.noiseSuppression
     }
 
     /// Even out the mic level over the recording (WebRTC AGC2). Default off.
     static var autoLevel: Bool {
-        d.bool(forKey: "autoLevel")
+        d.object(forKey: Key.autoLevel) as? Bool ?? Default.autoLevel
     }
 
     /// Show the elapsed time next to the menu bar icon while recording (default on).
     static var showElapsedTime: Bool {
-        d.object(forKey: "showElapsedTime") as? Bool ?? true
+        d.object(forKey: Key.showElapsedTime) as? Bool ?? Default.showElapsedTime
     }
 
     /// Show the menu bar icon while idle (default on). While recording it is always shown.
     static var showMenuBarIcon: Bool {
-        d.object(forKey: "showMenuBarIcon") as? Bool ?? true
+        d.object(forKey: Key.showMenuBarIcon) as? Bool ?? Default.showMenuBarIcon
     }
 
     /// UI language (default: follow the system).
     static var language: AppLanguage {
-        d.string(forKey: "language").flatMap(AppLanguage.init(rawValue:)) ?? .system
+        d.string(forKey: Key.language).flatMap(AppLanguage.init(rawValue:)) ?? .system
     }
 
     /// Shell command run after each recording is saved, with the recording folder as $1
     /// (also in $MEETINGRECORDER_DIR). Empty = none.
     static var afterSaveCommand: String {
-        d.string(forKey: "afterSaveCommand") ?? ""
+        d.string(forKey: Key.afterSaveCommand) ?? Default.afterSaveCommand
     }
 
     /// Reveal the recording in Finder once it has been saved (default on).
     static var openFolderAfterSaving: Bool {
-        d.object(forKey: "openFolderAfterSaving") as? Bool ?? true
+        d.object(forKey: Key.openFolderAfterSaving) as? Bool ?? Default.openFolderAfterSaving
     }
 
     /// Skip the "track was silent the whole time" alert (set from the alert's "Don't show again").

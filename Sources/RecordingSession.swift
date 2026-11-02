@@ -1,3 +1,4 @@
+import AppKit
 import AVFoundation
 import CoreAudio
 import Foundation
@@ -38,6 +39,8 @@ final class RecordingSession: @unchecked Sendable {
 
     let directory: URL
     let startedAt = Date()
+    /// Started from a script (`?quiet`): no alerts or Finder window for it. Main thread only.
+    var quiet = false
     let echoMode: EchoMode
     /// Whether the system audio track is recorded (AppSettings.recordSystemAudio at start).
     let recordSystem: Bool
@@ -82,6 +85,12 @@ final class RecordingSession: @unchecked Sendable {
 
     /// See AppSettings.recordingsFolder ($MEETINGRECORDER_ROOT, `recordingsFolder` default).
     static var rootDirectory: URL { AppSettings.recordingsFolder }
+
+    /// Opens the recordings folder in Finder (creating it if needed).
+    @MainActor static func revealRootDirectory() {
+        try? FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(rootDirectory)
+    }
 
     init() throws {
         recordSystem = AppSettings.recordSystemAudio

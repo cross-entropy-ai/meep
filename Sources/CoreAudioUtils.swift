@@ -36,6 +36,25 @@ func readStringProperty(_ object: AudioObjectID, _ selector: AudioObjectProperty
     return s as String
 }
 
+func deviceName(_ dev: AudioDeviceID) -> String? {
+    try? readStringProperty(dev, kAudioObjectPropertyName)
+}
+
+/// Format of the device's first input stream as IO procs see it (its virtual format).
+func inputStreamFormat(_ dev: AudioDeviceID) -> AudioStreamBasicDescription? {
+    var addr = propAddress(kAudioDevicePropertyStreamFormat, scope: kAudioObjectPropertyScopeInput)
+    var asbd = AudioStreamBasicDescription()
+    var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+    guard AudioObjectGetPropertyData(dev, &addr, 0, nil, &size, &asbd) == noErr,
+          asbd.mSampleRate > 0, asbd.mChannelsPerFrame > 0 else { return nil }
+    return asbd
+}
+
+extension AudioTimeStamp {
+    /// The capture host time of an IO callback's buffer, or now if the HAL gave none.
+    var hostTimeOrNow: UInt64 { mFlags.contains(.hostTimeValid) ? mHostTime : mach_absolute_time() }
+}
+
 func defaultDevice(output: Bool) throws -> AudioDeviceID {
     let dev: AudioDeviceID = try readProperty(
         AudioObjectID(kAudioObjectSystemObject),
@@ -104,7 +123,7 @@ func listInputDevices() -> [InputDevice] {
     return ids.compactMap { id in
         guard inputChannelCount(id) > 0, !isPrivateAggregate(id),
               let uid = try? readStringProperty(id, kAudioDevicePropertyDeviceUID),
-              let name = try? readStringProperty(id, kAudioObjectPropertyName) else { return nil }
+              let name = deviceName(id) else { return nil }
         return InputDevice(id: id, uid: uid, name: name)
     }
 }

@@ -8,6 +8,7 @@
 #   ffmpeg [-progress pipe:1] -i <x.caf|m4a|wav|mp3|flac|ogg> \
 #       -af aformat=…,ebur128=… -f null -                      # loudness
 #       -filter_complex …aformat,volume,amix,alimiter… -ar 48000 -ac 1 -c:a aac out.m4a   # mix
+#       (or -c:a pcm_s16le out.wav|caf)
 #       -ac 1 -ar 48000 -f s16le -                             # PCM stream for echo cancellation
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -48,7 +49,7 @@ CONFIGURE=(
   --enable-decoder=pcm_s16le,pcm_s24le,pcm_f32le,pcm_s16be,aac,mp3,flac,vorbis,opus
   --enable-parser=aac,mpegaudio,flac,vorbis,opus
   --enable-encoder=aac,pcm_s16le
-  --enable-muxer=ipod,mp4,caf,wav,pcm_s16le,null   # pcm_s16le = `-f s16le`; ipod = .m4a
+  --enable-muxer=ipod,caf,wav,pcm_s16le,null   # pcm_s16le = `-f s16le`; ipod = .m4a
   --enable-filter=aformat,aresample,volume,amix,alimiter,ebur128,anull
 )
 

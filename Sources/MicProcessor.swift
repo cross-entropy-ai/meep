@@ -6,7 +6,7 @@ import Foundation
 /// noise suppression and automatic level (AGC2 adaptive digital gain), plus a high-pass filter.
 /// Tracks start at the same moment; ffmpeg decodes them to 48 kHz mono PCM.
 /// Output: lossless 16-bit PCM, 48 kHz mono; the container follows the extension (.caf or .wav).
-/// On failure the partial output is removed.
+/// The output appears only when processing succeeded (written via a temporary file).
 enum MicProcessor {
     static let rate = 48000
     static let outputExtensions: Set<String> = ["caf", "wav"]
@@ -36,12 +36,9 @@ enum MicProcessor {
         guard !options.echoCancellation || system != nil else {
             throw CAError(what: "Echo cancellation needs the system track", status: -1)
         }
-        do {
-            try run(system: options.echoCancellation ? system : nil, mic: mic, output: output,
+        try Finalizer.writeAtomically(to: output) { temp in
+            try run(system: options.echoCancellation ? system : nil, mic: mic, output: temp,
                     options: options, progress: progress)
-        } catch {
-            try? FileManager.default.removeItem(at: output)
-            throw error
         }
     }
 

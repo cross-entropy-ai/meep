@@ -49,7 +49,7 @@ final class SystemAudioRecorder: @unchecked Sendable {
 
         // 3. Private aggregate device = default output device + our tap.
         outputDeviceID = try defaultDevice(output: true)
-        outputDeviceName = (try? readStringProperty(outputDeviceID, kAudioObjectPropertyName)) ?? "?"
+        outputDeviceName = deviceName(outputDeviceID) ?? "?"
         let outputUID = try readStringProperty(outputDeviceID, kAudioDevicePropertyDeviceUID)
         let aggDesc: [String: Any] = [
             kAudioAggregateDeviceNameKey: "MeetingRecorder Aggregate",
@@ -71,8 +71,7 @@ final class SystemAudioRecorder: @unchecked Sendable {
         try check(AudioDeviceCreateIOProcIDWithBlock(&procID, aggregateID, ioQueue) {
             [weak self] _, inInputData, inInputTime, _, _ in
             guard let self, var fmt = self.format else { return }
-            let host = inInputTime.pointee.mFlags.contains(.hostTimeValid)
-                ? inInputTime.pointee.mHostTime : mach_absolute_time()
+            let host = inInputTime.pointee.hostTimeOrNow
             var buf = Self.tapBuffer(fmt, inInputData)
             if buf == nil, let fresh = self.readTapFormat() {
                 // The tap's format can change under us. Re-read it and retry.

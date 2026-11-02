@@ -121,6 +121,37 @@ enum StatusReport {
     }
 }
 
+/// Why the last start failed, for `start --wait` (a failed start leaves no recording folder).
+/// ~/Library/Application Support/MeetingRecorder/last-start.json: {"at": ISO 8601, "error": text}.
+enum StartFailure {
+    static var url: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/MeetingRecorder/last-start.json")
+    }
+
+    private static var formatter: ISO8601DateFormatter {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }
+
+    static func record(_ error: String) {
+        let dir = url.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let at = formatter.string(from: Date())
+        try? Finalizer.jsonData(["at": at, "error": error]).write(to: url, options: .atomic)
+    }
+
+    /// The error of a start that failed at or after `date`, if any.
+    static func since(_ date: Date) -> String? {
+        guard let data = try? Data(contentsOf: url),
+              let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let at = (j["at"] as? String).flatMap(formatter.date(from:)),
+              at >= date else { return nil }
+        return j["error"] as? String ?? "unknown error"
+    }
+}
+
 enum HelpText {
     static var text: String {
         let exe = "MeetingRecorder"
@@ -130,29 +161,41 @@ enum HelpText {
 
         CONTROL (the app must be installed; these launch it if needed)
           \(exe) start [--wait] [--timeout <sec>]
-              Start recording. --wait: return once it is live and print its folder (timeout 15 s).
+              Start recording. --wait: return once it is live and print its folder (timeout 15 s);
+              exit 1 with the reason if the app could not start. Already recording: exit 0.
           \(exe) stop [--wait] [--timeout <sec>]
               Stop recording. --wait: return once it is saved and print its folder (timeout 600 s);
-              exit 0 if its status is "complete" or "recovered", 1 otherwise (or if nothing was recording).
+              exit 0 if its status is "complete" or "recovered", 1 otherwise. Not recording: exit 0
+              with nothing on stdout (a start still in flight is stopped, but not waited for).
+              Recordings started or stopped here show no alerts and open no Finder window.
           \(exe) status [--json]
               JSON: {"state": "idle|recording|saving", "current": {...},
                      "latest": {"dir", "mixed", "status", "after_save", ...}, "recordings_folder"}
               status of a recording: recording | saving | complete | recovered | incomplete
                 (a track was lost or recorded nothing) | recovered_after_crash
-          URL scheme: open "meetingrecorder://start" (also stop, preferences); returns at once
+          URL scheme: open "meetingrecorder://start" (also stop, preferences); returns at once.
+              Add ?quiet (meetingrecorder://start?quiet) for no alerts or Finder window.
 
         PROCESSING (inputs: .caf .wav .m4a .aac .mp3 .flac .ogg; output format follows the extension)
           \(exe) aec --system <file> --mic <file> -o <out.caf|.wav>
               WebRTC echo cancellation (removes the system audio from the mic), plus low noise
               suppression and a high-pass filter; ignores Preferences. 16-bit PCM.
-          \(exe) mix [--system <file>] [--mic <file>] -o <out.m4a|.wav|.caf> [--json]
+          \(exe) mix [--system <file>] [--mic <file>] -o <out.m4a|.wav|.caf> [--json] [-v]
               Loudness-matched mix: AAC (.m4a) or 16-bit PCM (.wav/.caf).
-              Loudness and gains go to stderr, or with --json into a JSON object on stdout.
-          \(exe) aec <recording-dir> [out]     same, on a recording → raw/mic_aec.caf
-          \(exe) remix <recording-dir> [--json] same, on a recording → mixed.m4a
+              --json: output, loudness and gains as JSON on stdout; -v: loudness and gains on stderr.
+          \(exe) aec <recording-dir> [out]
+              Redo a recording's mic processing with the settings it was recorded with
+              (echo cancellation, noise suppression, auto level). Without [out]: replaces
+              raw/mic_aec.caf and updates session.json.
+          \(exe) remix <recording-dir> [--json] [-v]
+              Re-mix a recording into mixed.m4a and update session.json.
+          Outputs are written to a temporary file first and replace the target only on success.
+          aec and remix refuse a recording that is still being recorded, saved, or unfinished.
+          After aec, run remix so that mixed.m4a uses the new microphone track.
 
         OTHER
-          \(exe) login-item on|off|status      Start at Login
+          \(exe) login-item on|off|status      Start at Login; prints on or off
+          \(exe) version                       e.g. \(AppInfo.version)
           \(exe) help
 
         CONVENTIONS
@@ -169,8 +212,8 @@ enum HelpText {
           All tracks start at the same moment: sample N of every file is the same instant.
           Folder: $MEETINGRECORDER_ROOT, else Preferences › General › Recordings Folder, i.e.
             defaults write com.junyi.MeetingRecorder recordingsFolder -string <path>
-          (the app reads the defaults key; the environment variable only affects this process,
-          so with it set, --wait and status look in a different folder than the app records to).
+          (the app reads the defaults key; the environment variable only affects this process:
+          start/stop refuse to run (exit 2) when it differs from the app's folder).
 
         AFTER SAVING
           Preferences › Agent › Run After Saving: a shell command run after each recording is saved,

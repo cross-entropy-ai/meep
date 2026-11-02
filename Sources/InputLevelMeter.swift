@@ -15,12 +15,8 @@ final class InputLevelMeter: @unchecked Sendable {
     init?(device: AudioDeviceID) {
         self.device = device
         // IO procs see the stream's virtual format, Float32 for shared (non-hogged) input.
-        var addr = propAddress(kAudioDevicePropertyStreamFormat, scope: kAudioObjectPropertyScopeInput)
-        var asbd = AudioStreamBasicDescription()
-        var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
-        guard AudioObjectGetPropertyData(device, &addr, 0, nil, &size, &asbd) == noErr,
-              asbd.mFormatID == kAudioFormatLinearPCM, asbd.mFormatFlags & kAudioFormatFlagIsFloat != 0,
-              asbd.mBitsPerChannel == 32 else { return nil }
+        guard let asbd = inputStreamFormat(device), asbd.mFormatID == kAudioFormatLinearPCM,
+              asbd.mFormatFlags & kAudioFormatFlagIsFloat != 0, asbd.mBitsPerChannel == 32 else { return nil }
         let ok = AudioDeviceCreateIOProcIDWithBlock(&procID, device, ioQueue) { [weak self] _, input, _, _, _ in
             guard let self else { return }
             var peak: Float = 0

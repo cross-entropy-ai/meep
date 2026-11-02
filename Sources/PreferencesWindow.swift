@@ -48,7 +48,7 @@ final class AppState {
 
     func refreshSources() {
         let defaultInput = try? defaultDevice(output: false)
-        defaultInputName = defaultInput.flatMap { try? readStringProperty($0, kAudioObjectPropertyName) }
+        defaultInputName = defaultInput.flatMap(deviceName)
         inputDevices = listInputDevices()
         micPermission = Permissions.microphone
         systemAudioPermission = Permissions.systemAudio
@@ -297,10 +297,10 @@ final class AppState {
 
 struct GeneralPreferencesView: View {
     let state: AppState
-    @AppStorage("language") private var language = AppLanguage.system.rawValue
-    @AppStorage("showMenuBarIcon") private var showMenuBarIcon = true
-    @AppStorage("showElapsedTime") private var showElapsed = true
-    @AppStorage("openFolderAfterSaving") private var openFolderAfterSaving = true
+    @AppStorage(AppSettings.Key.language) private var language = AppLanguage.system.rawValue
+    @AppStorage(AppSettings.Key.showMenuBarIcon) private var showMenuBarIcon = AppSettings.Default.showMenuBarIcon
+    @AppStorage(AppSettings.Key.showElapsedTime) private var showElapsed = AppSettings.Default.showElapsedTime
+    @AppStorage(AppSettings.Key.openFolderAfterSaving) private var openFolderAfterSaving = AppSettings.Default.openFolderAfterSaving
 
     var body: some View {
         Form {
@@ -347,11 +347,7 @@ struct GeneralPreferencesView: View {
                     HStack {
                         Button(tr("Change…"), action: state.chooseRecordingsFolder)
                             .disabled(state.isRecording || AppSettings.recordingsFolderFromEnvironment)
-                        Button(tr("Show in Finder")) {
-                            let root = RecordingSession.rootDirectory
-                            try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-                            NSWorkspace.shared.open(root)
-                        }
+                        Button(tr("Show in Finder"), action: RecordingSession.revealRootDirectory)
                     }
                 } label: {
                     Text(tr("Recordings Folder"))
@@ -388,11 +384,11 @@ struct GeneralPreferencesView: View {
 /// Per source (microphone, system audio): access and what is recorded; then post-processing.
 struct AudioPreferencesView: View {
     let state: AppState
-    @AppStorage("language") private var language = AppLanguage.system.rawValue
-    @AppStorage("echoCancellation") private var echoRaw = EchoMode.webrtc.rawValue
-    @AppStorage("recordSystemAudio") private var recordSystemAudio = true
-    @AppStorage("noiseSuppression") private var noiseRaw = NoiseSuppression.low.rawValue
-    @AppStorage("autoLevel") private var autoLevel = false
+    @AppStorage(AppSettings.Key.language) private var language = AppLanguage.system.rawValue
+    @AppStorage(AppSettings.Key.echoCancellation) private var echoRaw = AppSettings.Default.echoMode.rawValue
+    @AppStorage(AppSettings.Key.recordSystemAudio) private var recordSystemAudio = AppSettings.Default.recordSystemAudio
+    @AppStorage(AppSettings.Key.noiseSuppression) private var noiseRaw = AppSettings.Default.noiseSuppression.rawValue
+    @AppStorage(AppSettings.Key.autoLevel) private var autoLevel = AppSettings.Default.autoLevel
 
     var body: some View {
         Form {
@@ -489,18 +485,20 @@ struct AudioPreferencesView: View {
         .onChange(of: echoRaw) { _, _ in state.onChange() }
     }
 
-    // Defaults of the settings on this tab (match the getters in AppSettings).
+    private typealias Default = AppSettings.Default
+
     private var isDefault: Bool {
-        state.inputDeviceUID.isEmpty && recordSystemAudio && echoRaw == EchoMode.webrtc.rawValue
-            && noiseRaw == NoiseSuppression.low.rawValue && !autoLevel
+        state.inputDeviceUID.isEmpty && recordSystemAudio == Default.recordSystemAudio
+            && echoRaw == Default.echoMode.rawValue && noiseRaw == Default.noiseSuppression.rawValue
+            && autoLevel == Default.autoLevel
     }
 
     private func restoreDefaults() {
         if !state.inputDeviceUID.isEmpty { state.selectInputDevice("") }
-        recordSystemAudio = true
-        echoRaw = EchoMode.webrtc.rawValue
-        noiseRaw = NoiseSuppression.low.rawValue
-        autoLevel = false
+        recordSystemAudio = Default.recordSystemAudio
+        echoRaw = Default.echoMode.rawValue
+        noiseRaw = Default.noiseSuppression.rawValue
+        autoLevel = Default.autoLevel
     }
 
     /// Apple voice processing does its own noise suppression and gain; it runs with system audio
@@ -545,8 +543,8 @@ struct AudioPreferencesView: View {
 /// Everything an AI agent or a script needs: how to drive the app and where results go.
 struct AgentPreferencesView: View {
     let state: AppState
-    @AppStorage("language") private var language = AppLanguage.system.rawValue
-    @AppStorage("afterSaveCommand") private var afterSaveCommand = ""
+    @AppStorage(AppSettings.Key.language) private var language = AppLanguage.system.rawValue
+    @AppStorage(AppSettings.Key.afterSaveCommand) private var afterSaveCommand = AppSettings.Default.afterSaveCommand
 
     static let urls = ["meetingrecorder://start", "meetingrecorder://stop", "meetingrecorder://preferences"]
     private var helpCommand: String { "\"\(Bundle.main.executableURL?.path ?? "MeetingRecorder")\" --help" }
@@ -608,7 +606,7 @@ struct AgentPreferencesView: View {
 
 struct AboutPreferencesView: View {
     let state: AppState
-    @AppStorage("language") private var language = AppLanguage.system.rawValue
+    @AppStorage(AppSettings.Key.language) private var language = AppLanguage.system.rawValue
 
     var body: some View {
         VStack(spacing: 0) {

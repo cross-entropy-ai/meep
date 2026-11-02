@@ -40,7 +40,7 @@ enum Finalizer {
         var meta = inMeta
         var warnings = (meta["warnings"] as? [String]) ?? []
         let raw = rawDir(dir)
-        try? FileManager.default.createDirectory(at: raw, withIntermediateDirectories: true)
+        removePartialFiles(in: [dir, raw])  // left by a run that was killed mid-write
         let f = { (name: String) in raw.appendingPathComponent(name) }
         let sysPCM = f(systemPCM), micPCM = f(micPCM), aecPCM = f(micAECPCM)
         let hasSys = captured?.system ?? hasAudio(sysPCM)
@@ -50,19 +50,7 @@ enum Finalizer {
         let processing = meta["processing"] as? [String: Any]
         let resumeEncoding = processing?["stage"] as? String == "encoding"
 
-        // Mic processing, from the settings stored at recording time (older sessions: low noise
-        // suppression with echo cancellation, as before). Apple voice processing already did
-        // its own noise suppression and gain.
-        // Older sessions only have tracks.mic.processing, and only after a clean stop.
-        let tracksIn = meta["tracks"] as? [String: [String: Any]]
-        let appleProcessed = echoMode == .apple && (meta["mic_voice_processing"] as? Bool
-            ?? ((tracksIn?["mic"]?["processing"] as? String ?? "Apple voice processing") != "none"))
-        var options = MicProcessor.Options(
-            echoCancellation: echoMode == .webrtc && hasSys && hasMic,
-            noiseSuppression: (meta["noise_suppression"] as? String).flatMap(NoiseSuppression.init(rawValue:)) ?? .low,
-            autoLevel: meta["auto_level"] as? Bool ?? false)
-        if appleProcessed { options.noiseSuppression = .off; options.autoLevel = false }
-        if !options.echoCancellation && meta["noise_suppression"] == nil { options.noiseSuppression = .off }
+        let options = micOptions(meta: meta, echoMode: echoMode, hasSystem: hasSys, hasMic: hasMic)
 
         // Progress: each step owns a slice of 0...1 sized by its cost.
         let runAEC = !resumeEncoding && hasMic && !options.summary.isEmpty
@@ -185,8 +173,12 @@ enum Finalizer {
         var done: [URL] = []
         for dir in dirs {
             guard var meta = readMeta(dir), ["recording", "saving"].contains(meta["status"] as? String ?? "") else { continue }
-            // Skip a capture whose recording process is still alive (e.g. another running instance).
-            if let pid = meta["pid"] as? Int32, pid != getpid(), kill(pid, 0) == 0 { continue }
+            // Skip a recording whose process is alive: another running instance, or this one
+            // (a recording that started while recovery was listing the folder).
+            if let pid = meta["pid"] as? Int32, kill(pid, 0) == 0 { continue }
+            // From here this process owns it: the CLI then sees it busy (aec/remix refuse it).
+            meta["pid"] = getpid()
+            writeMeta(meta, to: dir)
             let mode = (meta["echo_cancellation"] as? String).flatMap(EchoMode.init(rawValue:)) ?? .off
             if meta["status"] as? String == "saving", meta["final_status"] != nil {
                 // Capture ended cleanly; only processing was interrupted. The metadata is complete.
@@ -211,17 +203,81 @@ enum Finalizer {
 
     // MARK: - Helpers
 
+    /// Mic processing for a recording, from the settings stored at recording time (older
+    /// sessions: low noise suppression with echo cancellation, as before). Apple voice processing
+    /// already did its own noise suppression and gain. Also used by `aec <recording-dir>`.
+    static func micOptions(meta: [String: Any], echoMode: EchoMode, hasSystem: Bool, hasMic: Bool)
+        -> MicProcessor.Options {
+        // Older sessions only have tracks.mic.processing, and only after a clean stop.
+        let tracks = meta["tracks"] as? [String: [String: Any]]
+        let appleProcessed = echoMode == .apple && (meta["mic_voice_processing"] as? Bool
+            ?? ((tracks?["mic"]?["processing"] as? String ?? "Apple voice processing") != "none"))
+        var options = MicProcessor.Options(
+            echoCancellation: echoMode == .webrtc && hasSystem && hasMic,
+            noiseSuppression: (meta["noise_suppression"] as? String).flatMap(NoiseSuppression.init(rawValue:)) ?? .low,
+            autoLevel: meta["auto_level"] as? Bool ?? false)
+        if appleProcessed { options.noiseSuppression = .off; options.autoLevel = false }
+        if !options.echoCancellation && meta["noise_suppression"] == nil { options.noiseSuppression = .off }
+        return options
+    }
+
     static func readMeta(_ dir: URL) -> [String: Any]? {
         guard let data = try? Data(contentsOf: rawDir(dir).appendingPathComponent("session.json")) else { return nil }
         return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
 
-    static func writeMeta(_ meta: [String: Any], to dir: URL) {
-        guard let data = try? JSONSerialization.data(withJSONObject: meta, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
-        else { return }
+    /// Writes `output` via a hidden temporary file next to it (same extension, which picks the
+    /// format) that replaces it only when `write` succeeded: an interrupted run never leaves a
+    /// truncated file under the final name.
+    static func writeAtomically(to output: URL, _ write: (URL) throws -> Void) throws {
+        let fm = FileManager.default
+        let temp = output.deletingLastPathComponent().appendingPathComponent(
+            ".\(output.deletingPathExtension().lastPathComponent)\(partialMarker)\(output.pathExtension)")
+        try? fm.removeItem(at: temp)
+        do {
+            try write(temp)
+            // Same directory, so rename(2): atomic, replaces an existing file, works on any volume
+            // (FileManager.replaceItemAt needs a scratch directory some network volumes lack).
+            guard rename(temp.path, output.path) == 0 else {
+                throw CAError(what: "rename to \(output.path): \(String(cString: strerror(errno)))", status: errno)
+            }
+        } catch {
+            try? fm.removeItem(at: temp)
+            throw error
+        }
+    }
+
+    private static let partialMarker = ".partial."
+
+    /// Deletes temporary files writeAtomically left behind when the process was killed.
+    static func removePartialFiles(in dirs: [URL]) {
+        let fm = FileManager.default
+        for dir in dirs {
+            for name in (try? fm.contentsOfDirectory(atPath: dir.path)) ?? []
+            where name.hasPrefix(".") && name.contains(partialMarker) {
+                try? fm.removeItem(at: dir.appendingPathComponent(name))
+            }
+        }
+    }
+
+    /// Pretty, key-sorted JSON (session.json and CLI output).
+    static func jsonData(_ object: Any) -> Data {
+        (try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]))
+            ?? Data("{}".utf8)
+    }
+
+    /// Returns false (and logs) if session.json could not be written, e.g. a full disk.
+    @discardableResult
+    static func writeMeta(_ meta: [String: Any], to dir: URL) -> Bool {
         let raw = rawDir(dir)
-        try? FileManager.default.createDirectory(at: raw, withIntermediateDirectories: true)
-        try? data.write(to: raw.appendingPathComponent("session.json"), options: .atomic)
+        do {
+            try FileManager.default.createDirectory(at: raw, withIntermediateDirectories: true)
+            try jsonData(meta).write(to: raw.appendingPathComponent("session.json"), options: .atomic)
+            return true
+        } catch {
+            NSLog("MeetingRecorder: can't write %@/session.json: %@", raw.path, "\(error)")
+            return false
+        }
     }
 
     private static func hasAudio(_ url: URL) -> Bool {

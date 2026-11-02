@@ -54,10 +54,13 @@ enum Mixer {
             "amix=inputs=\(labels.count):duration=longest:normalize=0,alimiter=limit=0.95:level=false[out]"
         let pcm = ["wav", "caf"].contains(output.pathExtension.lowercased())
         args += ["-filter_complex", filter, "-map", "[out]", "-ar", "48000", "-ac", "1"]
-            + (pcm ? ["-c:a", "pcm_s16le"] : ["-c:a", "aac", "-b:a", "96k"]) + [output.path]
+            + (pcm ? ["-c:a", "pcm_s16le"] : ["-c:a", "aac", "-b:a", "96k"])
         let length = inputs.map { Finalizer.duration($0.1) }.max() ?? 0
         let mixBase = 1 - mixShare
-        _ = try runFFmpeg(args, duration: length, progress: { progress?(mixBase + mixShare * $0) })
+        let mixArgs = args
+        try Finalizer.writeAtomically(to: output) { temp in
+            _ = try runFFmpeg(mixArgs + [temp.path], duration: length, progress: { progress?(mixBase + mixShare * $0) })
+        }
         progress?(1)
         return result
     }

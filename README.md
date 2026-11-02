@@ -54,9 +54,11 @@ The app binary doubles as a command-line tool:
 ```bash
 mr=/Applications/MeetingRecorder.app/Contents/MacOS/MeetingRecorder   # or build/MeetingRecorder.app/…
 
-dir=$($mr start --wait)          # starts recording (launching the app if needed), prints the folder
+dir=$($mr start --wait)          # starts recording (launching the app if needed), prints the folder;
+                                 #   exit 1 with the reason if it can't start
 $mr stop --wait                  # returns once the recording is saved; exit 0 if it is complete or recovered
 $mr status                       # JSON: idle / recording / saving, and the latest recording
+$mr aec "$dir"                   # redo a recording's mic processing; $mr remix "$dir" redoes the mix
 
 $mr aec --system call.caf --mic me.caf -o me_clean.wav    # remove speaker echo from a mic track
 $mr mix --system call.caf --mic me_clean.wav -o meeting.m4a
@@ -64,7 +66,9 @@ $mr mix --system call.caf --mic me_clean.wav -o meeting.m4a
 
 Results (a folder or file path, or JSON) go to stdout; messages and progress go to stderr.
 Exit codes: `0` ok, `1` failed, `2` bad usage, `3` timed out. `$mr help` lists everything.
-`open "meetingrecorder://start"` and `…://stop` work too, without waiting.
+Recordings started or stopped from the command line show no alerts and open no Finder window.
+`open "meetingrecorder://start"` and `…://stop` work too, without waiting (add `?quiet` for the same silence).
+Settings can be changed with `defaults write com.junyi.MeetingRecorder <key> -bool|-string <value>` (e.g. `autoLevel -bool true`); `$mr help` lists the keys.
 
 **Run After Saving** (Preferences › Agent) runs a command of your choice after each recording, e.g. a transcription script, with the recording folder as `$1`. It runs via `zsh -lc`, which reads `~/.zprofile` but not `~/.zshrc`, so set `PATH` there or use full paths. Its progress and exit status appear in `raw/session.json` under `after_save`.
 

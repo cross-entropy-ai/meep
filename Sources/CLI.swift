@@ -14,12 +14,12 @@ enum CLI {
     struct Failure: Error, CustomStringConvertible { let description: String }
 
     /// Whether `args` (without the program name) is a CLI invocation. No arguments, or the
-    /// single-dash arguments macOS and Cocoa add at launch (-psn_0_1234,
-    /// -NSDocumentRevisionsDebugMode YES, -AppleLanguages …), mean: launch the GUI.
+    /// arguments macOS and Cocoa add at launch (-psn_0_1234, -NSDocumentRevisionsDebugMode YES,
+    /// -AppleLanguages …), mean: launch the GUI. Anything else (also `-help`) is the CLI, which
+    /// reports what it doesn't know instead of silently opening the app.
     static func isInvocation(_ args: [String]) -> Bool {
         guard let first = args.first else { return false }
-        let cocoaStyle = first.hasPrefix("-") && !first.hasPrefix("--") && first.count > 2
-        return !cocoaStyle
+        return !["-psn_", "-NS", "-Apple"].contains { first.hasPrefix($0) }
     }
 
     /// Runs the command in `args` (non-empty) and exits. `cmd` and `--cmd` are the same command.
@@ -30,6 +30,7 @@ enum CLI {
             let code: Exit
             switch name {
             case "help": code = try help(rest)
+            case "version": code = try version(rest)
             case "status": code = try status(rest)
             case "login-item": code = try loginItem(rest)
             case "aec": code = try aec(rest)
@@ -57,6 +58,13 @@ enum CLI {
         return .ok
     }
 
+    /// `version`: the app version, e.g. "0.5.1".
+    static func version(_ args: [String]) throws -> Exit {
+        _ = try Args(args)
+        print(AppInfo.version)
+        return .ok
+    }
+
     /// `status [--json]`: always JSON (--json is accepted for symmetry with other commands).
     static func status(_ args: [String]) throws -> Exit {
         _ = try Args(args, flags: ["--json"])
@@ -71,14 +79,22 @@ enum CLI {
             throw UsageError(message: "login-item takes on, off or status, not \(value)")
         }
         if value != "status" { try AppSettings.setLaunchAtLogin(value == "on") }
-        print("launch at login: \(AppSettings.launchAtLogin ? "on" : "off")")
+        print(AppSettings.launchAtLogin ? "on" : "off")  // e.g. [ "$(… login-item status)" = on ]
         return .ok
     }
 
     /// `start [--wait] [--timeout <sec>]`: asks the app to start recording. With --wait, returns
-    /// once a recording is live and prints its folder (exit 3 on timeout).
+    /// once a recording is live and prints its folder; exit 1 if the app could not start it
+    /// (reason on stderr), 3 on timeout. Already recording: that recording counts (exit 0).
     static func start(_ args: [String]) throws -> Exit {
         let (wait, timeout) = try waitOptions(args, defaultTimeout: 15)
+        try checkSameFolderAsApp()
+        if let c = StatusReport.current, c.state == "recording" {
+            printErr("already recording")
+            if wait { print(c.dir.path) }
+            return .ok
+        }
+        let sent = Date()
         try send("start")
         guard wait else { return .ok }
         let deadline = Date().addingTimeInterval(timeout)
@@ -86,6 +102,10 @@ enum CLI {
             if let c = StatusReport.current, c.state == "recording" {
                 print(c.dir.path)
                 return .ok
+            }
+            if let error = StartFailure.since(sent) {
+                printErr("could not start recording: \(error)")
+                return .failed
             }
             if Date() >= deadline {
                 printErr("timed out after \(String(format: "%g", timeout)) s: no recording started")
@@ -97,17 +117,19 @@ enum CLI {
 
     /// `stop [--wait] [--timeout <sec>]`: asks the app to stop recording. With --wait, returns once
     /// the recording is saved and prints its folder: exit 0 if its status is "complete" or
-    /// "recovered" (interrupted, every track restored), 1 for any other status (or if nothing was
-    /// recording), 3 on timeout.
+    /// "recovered" (interrupted, every track restored), 1 for any other status, 3 on timeout.
+    /// Not recording: nothing to do, exit 0 ("not recording" on stderr).
     static func stop(_ args: [String]) throws -> Exit {
         let (wait, timeout) = try waitOptions(args, defaultTimeout: 600)
-        let dir = StatusReport.current?.dir  // the recording this stop is about
-        try send("stop")
-        guard wait else { return .ok }
-        guard let dir else {
+        try checkSameFolderAsApp()
+        // The recording this stop is about (not one that is only being saved already).
+        let live = StatusReport.current.flatMap { $0.state == "recording" ? $0.dir : nil }
+        try send("stop")  // also when idle: a start may be on its way in the app
+        guard let dir = live else {
             printErr("not recording")
-            return .failed
+            return .ok
         }
+        guard wait else { return .ok }
         let deadline = Date().addingTimeInterval(timeout)
         while true {
             let status = Finalizer.readMeta(dir)?["status"] as? String ?? ""
@@ -136,12 +158,26 @@ enum CLI {
         return (a.has("--wait"), timeout)
     }
 
-    /// Sends meetingrecorder://<command> through LaunchServices (`open -g`), which launches the
-    /// app in the background if it is not running.
+    /// The app reads the recordings folder from its settings; $MEETINGRECORDER_ROOT only reaches
+    /// this process. If they differ, --wait and status would watch the wrong folder forever.
+    private static func checkSameFolderAsApp() throws(UsageError) {
+        guard AppSettings.recordingsFolderFromEnvironment else { return }
+        let app = AppSettings.appRecordingsFolder.resolvingSymlinksInPath().path
+        let mine = AppSettings.recordingsFolder.resolvingSymlinksInPath().path
+        guard mine == app else {
+            throw UsageError(message: "MEETINGRECORDER_ROOT (\(mine)) differs from the app's recordings folder (\(app)); "
+                             + "unset it, or set the folder with defaults write com.junyi.MeetingRecorder recordingsFolder")
+        }
+    }
+
+    /// Sends meetingrecorder://<command>?quiet through LaunchServices (`open -g`), which launches
+    /// the app in the background if it is not running. `quiet`: no alerts or Finder window for
+    /// recordings a script starts or stops.
     static func send(_ command: String) throws {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        p.arguments = ["-g", "meetingrecorder://\(command)"]
+        p.arguments = ["-g", "meetingrecorder://\(command)?quiet"]
+        p.standardInput = FileHandle.nullDevice
         p.standardOutput = FileHandle.standardError  // keep stdout for results
         try p.run()
         p.waitUntilExit()
@@ -151,7 +187,9 @@ enum CLI {
     }
 
     /// `aec --system <file> --mic <file> -o <out.caf|.wav>`: removes the system audio's echo from
-    /// the mic track. Or `aec <recording-dir> [out]`: the same on a recording's tracks.
+    /// the mic track (plus low noise suppression). Or `aec <recording-dir> [out]`: redoes a
+    /// recording's mic processing with the settings it was recorded with (session.json); without
+    /// [out] it replaces raw/mic_aec.caf and updates session.json.
     static func aec(_ args: [String]) throws -> Exit {
         let a = try Args(args, options: ["--system", "--mic", "-o"], count: 0...2)
         if a.positional.isEmpty {
@@ -168,42 +206,89 @@ enum CLI {
             throw UsageError(message: "aec takes either <recording-dir> [out] or --system/--mic/-o, not both")
         }
         let dir = try recordingDir(a.positional[0])
+        let meta = Finalizer.readMeta(dir)
+        try checkNotBusy(dir, meta)
         let raw = Finalizer.rawDir(dir)
-        let system = try firstExisting(raw, [Finalizer.systemPCM, "system.caf"])
+        let system = try? firstExisting(raw, [Finalizer.systemPCM, "system.caf"])
         let mic = try firstExisting(raw, [Finalizer.micPCM, "mic.caf"])
+        // As recorded; a folder without session.json gets the defaults (echo cancellation + low NS).
+        let options = meta.map {
+            Finalizer.micOptions(meta: $0, echoMode: ($0["echo_cancellation"] as? String).flatMap(EchoMode.init) ?? .off,
+                                 hasSystem: system != nil, hasMic: true)
+        } ?? MicProcessor.Options(echoCancellation: system != nil)
+        guard !options.summary.isEmpty else {
+            let apple = (meta?["echo_cancellation"] as? String) == EchoMode.apple.rawValue
+            printErr(apple ? "nothing to do: Apple voice processing already processed this recording's microphone"
+                           : "nothing to do: echo cancellation, noise suppression and auto level are off for this recording")
+            return .ok
+        }
         if a.positional.count == 2 {
             let out = URL(fileURLWithPath: a.positional[1])
             try checkExtension(out, MicProcessor.outputExtensions)
-            try runAEC(system: system, mic: mic, output: out)
+            try runAEC(system: system, mic: mic, output: out, options: options)
             print(out.path)
-        } else {
-            // The recording's own layout: lossless PCM first, then AAC raw/mic_aec.caf.
-            let pcm = raw.appendingPathComponent(Finalizer.micAECPCM)
-            let out = raw.appendingPathComponent("mic_aec.caf")
-            try runAEC(system: system, mic: mic, output: pcm)
-            try Finalizer.encodeAAC(pcm, to: out, bitRate: 64_000, progress: progress("encode"))
-            progressDone()
-            try? FileManager.default.removeItem(at: pcm)
-            print(out.path)
+            return .ok
         }
+        // The recording's own layout: lossless PCM first, then AAC raw/mic_aec.caf.
+        let pcm = raw.appendingPathComponent(Finalizer.micAECPCM)
+        let out = raw.appendingPathComponent("mic_aec.caf")
+        try runAEC(system: system, mic: mic, output: pcm, options: options)
+        // The PCM goes either way: left behind, remix would prefer it over what session.json says.
+        defer { try? FileManager.default.removeItem(at: pcm) }
+        try Finalizer.writeAtomically(to: out) { temp in
+            try Finalizer.encodeAAC(pcm, to: temp, bitRate: 64_000, progress: progress("encode"))
+        }
+        progressDone()
+        if var meta {
+            var tracks = meta["tracks"] as? [String: [String: Any]] ?? [:]
+            tracks["mic_aec"] = ["file": "\(Finalizer.rawFolder)/mic_aec.caf", "duration_sec": Finalizer.duration(out),
+                                 "format": "AAC 48kHz mono 64kbps, WebRTC " + options.summary]
+            meta["tracks"] = tracks
+            meta["mic_processing"] = options.summary
+            if !Finalizer.writeMeta(meta, to: dir) { printErr("warning: could not update session.json") }
+        }
+        if FileManager.default.fileExists(atPath: dir.appendingPathComponent("mixed.m4a").path) {
+            printErr("mixed.m4a still has the previous microphone track: run remix to update it")
+        }
+        print(out.path)
         return .ok
     }
 
-    /// `remix <recording-dir> [--json]`: re-mix a recording's tracks into mixed.m4a.
+    /// A recording the app is (or will be) writing: still recording or saving, or left unfinished
+    /// by a crash or quit, which the app finishes on its next launch.
+    private static func checkNotBusy(_ dir: URL, _ meta: [String: Any]?) throws {
+        guard let meta, let status = meta["status"] as? String, ["recording", "saving"].contains(status) else { return }
+        let live = (meta["pid"] as? Int32).map { kill($0, 0) == 0 } ?? false
+        throw Failure(description: live
+            ? "\(dir.path) is still being recorded or saved (status \(status))"
+            : "\(dir.path) is unfinished (status \(status)); open MeetingRecorder to finish it first")
+    }
+
+    /// `remix <recording-dir> [--json] [-v]`: re-mix a recording's tracks into mixed.m4a and
+    /// update session.json.
     static func remix(_ args: [String]) throws -> Exit {
-        let a = try Args(args, flags: ["--json"], count: 1...1)
+        let a = try Args(args, flags: ["--json", "-v"], count: 1...1)
         let dir = try recordingDir(a.positional[0])
+        let meta = Finalizer.readMeta(dir)
+        try checkNotBusy(dir, meta)
         let raw = Finalizer.rawDir(dir)
         // Prefer lossless files (present if encoding failed or has not run yet), and the AEC mic.
         let system = try? firstExisting(raw, [Finalizer.systemPCM, "system.caf"])
         let mic = try? firstExisting(raw, [Finalizer.micAECPCM, "mic_aec.caf", Finalizer.micPCM, "mic.caf"])
         guard system != nil || mic != nil else { throw Failure(description: "no tracks found in \(raw.path)") }
-        return try runMix(system: system, mic: mic, output: dir.appendingPathComponent("mixed.m4a"), json: a.has("--json"))
+        return try runMix(system: system, mic: mic, output: dir.appendingPathComponent("mixed.m4a"),
+                          json: a.has("--json"), verbose: a.has("-v")) { r in
+            guard var meta else { return }
+            meta["mixed"] = "mixed.m4a"
+            meta["mix_loudness_lufs"] = r.loudnessLUFS
+            meta["mix_gain_db"] = r.gainsDB
+            if !Finalizer.writeMeta(meta, to: dir) { printErr("warning: could not update session.json") }
+        }
     }
 
-    /// `mix [--system <file>] [--mic <file>] -o <out.m4a|.wav|.caf> [--json]`: loudness-matched mix.
+    /// `mix [--system <file>] [--mic <file>] -o <out.m4a|.wav|.caf> [--json] [-v]`: loudness-matched mix.
     static func mix(_ args: [String]) throws -> Exit {
-        let a = try Args(args, options: ["--system", "--mic", "-o"], flags: ["--json"])
+        let a = try Args(args, options: ["--system", "--mic", "-o"], flags: ["--json", "-v"])
         guard let out = a["-o"] else { throw UsageError(message: "mix needs -o <out>") }
         guard a["--system"] != nil || a["--mic"] != nil else {
             throw UsageError(message: "mix needs --system <file>, --mic <file>, or both")
@@ -211,31 +296,34 @@ enum CLI {
         let output = URL(fileURLWithPath: out)
         try checkExtension(output, Mixer.outputExtensions)
         return try runMix(system: try a["--system"].map(inputFile), mic: try a["--mic"].map(inputFile),
-                          output: output, json: a.has("--json"))
+                          output: output, json: a.has("--json"), verbose: a.has("-v"))
     }
 
     // MARK: - Shared steps
 
-    static func runAEC(system: URL, mic: URL, output: URL) throws {
+    static func runAEC(system: URL?, mic: URL, output: URL,
+                       options: MicProcessor.Options = MicProcessor.Options()) throws {
         try checkNotInput(output, [system, mic])
         defer { progressDone() }
-        try MicProcessor.process(system: system, mic: mic, output: output, progress: progress("aec"))
+        try MicProcessor.process(system: system, mic: mic, output: output, options: options, progress: progress("aec"))
     }
 
-    /// Mixes, then prints the output path (or with `json`, a JSON object) on stdout and the
-    /// loudness/gain summary on stderr.
-    static func runMix(system: URL?, mic: URL?, output: URL, json: Bool) throws -> Exit {
+    /// Mixes, then prints the output path (or with `json`, a JSON object) on stdout; with
+    /// `verbose`, the loudness/gain summary on stderr. `done` runs after a successful mix.
+    static func runMix(system: URL?, mic: URL?, output: URL, json: Bool, verbose: Bool,
+                       done: (Mixer.Result) -> Void = { _ in }) throws -> Exit {
         try checkNotInput(output, [system, mic])
         let r: Mixer.Result
         do {
             defer { progressDone() }
             r = try Mixer.mix(system: system, mic: mic, output: output, progress: progress("mix"))
         }
+        done(r)
         if json {
             printJSON(["output": output.path, "loudness_lufs": r.loudnessLUFS, "gain_db": r.gainsDB])
         } else {
             print(output.path)
-            for name in ["system", "mic"] {
+            for name in ["system", "mic"] where verbose {
                 guard let gain = r.gainsDB[name] else { continue }
                 let lufs = r.loudnessLUFS[name].map { String(format: "%.1f LUFS", $0) } ?? "not measured"
                 printErr("\(name): loudness \(lufs), gain \(String(format: "%+.1f", gain)) dB")
@@ -292,8 +380,7 @@ enum CLI {
     }
 
     static func printJSON(_ object: [String: Any]) {
-        let data = (try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])) ?? Data()
-        print(String(data: data, encoding: .utf8) ?? "{}")
+        print(String(decoding: Finalizer.jsonData(object), as: UTF8.self))
     }
 
     /// The progress line currently on stderr (nil = none). Progress can come from any thread.

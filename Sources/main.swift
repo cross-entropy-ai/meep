@@ -19,13 +19,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Start (true) or stop (false) asked for while starting or stopping; applied when that ends,
     /// so a quick `stop` + `start` from a script or the hotkey is not lost.
     private var pendingRecording: Bool?
+    private var pendingQuiet = false
     /// Processing progress 0...1 (after Stop, or finishing an unfinished recording at launch).
     private var progress: Double?
     private var recoveringPrevious = false
     private var progressItem: NSMenuItem!
     private let progressBar = NSProgressIndicator()
     private var launched = false
-    private var pendingCommand: String?
+    private var pendingCommand: (command: String, quiet: Bool)?
+    /// Launched by a quiet URL (the CLI): no alert about recovered recordings either.
+    private var launchedQuietly = false
     private let appState = AppState()
     private lazy var preferences = PreferencesWindowController(state: appState)
 
@@ -81,10 +84,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateUI()
 
         launched = true
+        launchedQuietly = pendingCommand?.quiet ?? false
         recoverUnfinishedSessions()
         if let cmd = pendingCommand {
             pendingCommand = nil
-            run(command: cmd)
+            run(command: cmd.command, quiet: cmd.quiet)
         } else {
             Task { _ = await micPermission() }
         }
@@ -116,7 +120,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             recoveringPrevious = false
             if saving == 0 { progress = nil }
             updateUI()
-            guard !dirs.isEmpty else { return }
+            guard !dirs.isEmpty, !launchedQuietly else { return }
             alert(tr("Finished unfinished recordings"),
                   tr("These recordings were not finished last time (the app quit or the Mac shut down). They are processed and saved now:") + "\n\n"
                   + dirs.map(\.lastPathComponent).joined(separator: "\n"))
@@ -145,20 +149,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let s = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
               let url = URL(string: s), let host = url.host else { return }
         // URL scheme: meetingrecorder://start|stop|preferences[/general|/audio|/agent|/about]
-        let command = host + url.path
-        if launched { run(command: command) } else { pendingCommand = command }
+        // `?quiet` (the CLI adds it): no alerts and no Finder window for that recording; outcomes
+        // are in session.json and last-start.json instead, for scripts that nobody watches.
+        let command = host + (url.path.hasSuffix("/") ? String(url.path.dropLast()) : url.path)
+        let quiet = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
+            .contains { $0.name == "quiet" } ?? false
+        if launched { run(command: command, quiet: quiet) } else { pendingCommand = (command, quiet) }
     }
 
-    private func run(command host: String) {
+    private func run(command host: String, quiet: Bool) {
         switch host {
-        case "start": request(recording: true)
-        case "stop": request(recording: false)
+        case "start": request(recording: true, quiet: quiet)
+        case "stop": request(recording: false, quiet: quiet)
         case "preferences": preferences.show()
         case "preferences/general": preferences.show(tab: .general)
         case "preferences/audio": preferences.show(tab: .audio)
         case "preferences/agent": preferences.show(tab: .agent)
         case "preferences/about": preferences.show(tab: .about)
-        default: break
+        default: NSLog("MeetingRecorder: unknown URL command %@", host)
         }
     }
 
@@ -168,22 +176,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         request(recording: !expected)
     }
 
-    private func request(recording want: Bool) {
+    private func request(recording want: Bool, quiet: Bool = false) {
         if starting || stopping {
             pendingRecording = want
+            pendingQuiet = quiet
             return
         }
         pendingRecording = nil  // acting now supersedes anything queued
-        if want, session == nil { start() } else if !want, let s = session { stop(s) }
+        if want, session == nil { start(quiet: quiet) } else if !want, let s = session { stop(s, quiet: quiet) }
     }
 
     private func applyPendingRequest() {
         guard let want = pendingRecording else { return }
         pendingRecording = nil
-        request(recording: want)
+        request(recording: want, quiet: pendingQuiet)
     }
 
-    private func start() {
+    private func start(quiet: Bool) {
         starting = true  // the permission prompt can take a while
         Task {
             let micAllowed = await micPermission()
@@ -193,19 +202,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 do {
                     let s = try RecordingSession()
+                    s.quiet = quiet
                     try s.start()
                     session = s
                     startTimer()
                 } catch {
-                    failure = "\(error)"
+                    failure = (error as? CAError)?.description ?? error.localizedDescription
                 }
             }
+            if let failure { StartFailure.record(failure) }  // for `start --wait`
             starting = false
             updateUI()
             // A stop asked for meanwhile runs now, before the alerts below (which block).
             applyPendingRequest()
             // Alerts only after capture is running (or has failed): they block until dismissed.
-            if let failure {
+            if quiet {
+                // A script started this: the outcome is in session.json / last-start.json.
+            } else if let failure {
                 alert(tr("Can't start recording"), failure,
                       settingsURL: micAllowed ? nil : Permissions.microphoneSettingsURL.absoluteString)
             } else if !micAllowed {
@@ -225,7 +238,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         timer = t
     }
 
-    private func stop(_ s: RecordingSession) {
+    private func stop(_ s: RecordingSession, quiet: Bool = false) {
+        let quiet = quiet || s.quiet
         stopping = true
         timer?.invalidate(); timer = nil
         updateUI()
@@ -249,6 +263,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             saving -= 1
             if saving == 0 { progress = nil }
             updateUI()
+            // A script started or stopped this one: warnings are in session.json, no Finder.
+            if quiet { return }
             // Silence warnings can be muted; real failures (write errors, lost tracks) always show.
             let shown = AppSettings.hideSilenceWarnings
                 ? warnings.filter { !s.silenceWarnings.contains($0) } : warnings
@@ -358,9 +374,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openFolder() {
-        let root = RecordingSession.rootDirectory
-        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        NSWorkspace.shared.open(root)
+        RecordingSession.revealRootDirectory()
     }
 
     @objc private func quit() {

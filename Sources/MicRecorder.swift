@@ -48,7 +48,7 @@ final class MicRecorder: @unchecked Sendable {
         }
         if let def {
             inputDeviceID = def
-            inputDeviceName = (try? readStringProperty(def, kAudioObjectPropertyName)) ?? "?"
+            inputDeviceName = deviceName(def) ?? "?"
         }
         usesEngine = true
         let input = engine.inputNode
@@ -102,7 +102,7 @@ final class MicRecorder: @unchecked Sendable {
 
     private func startDevice(_ dev: AudioDeviceID, writer: TrackWriter) throws {
         inputDeviceID = dev
-        inputDeviceName = (try? readStringProperty(dev, kAudioObjectPropertyName)) ?? "?"
+        inputDeviceName = deviceName(dev) ?? "?"
         if voiceProcessing {
             NSLog("MeetingRecorder: voice processing needs the default input; recording %@ raw", inputDeviceName)
         }
@@ -128,23 +128,19 @@ final class MicRecorder: @unchecked Sendable {
             let mono = fmt.isInterleaved ? fmt : AVAudioFormat(
                 commonFormat: fmt.commonFormat, sampleRate: fmt.sampleRate, channels: 1, interleaved: false)!
             var one = AudioBufferList(mNumberBuffers: 1, mBuffers: first)
-            guard let pcm = AVAudioPCMBuffer(pcmFormat: mono, bufferListNoCopy: &one, deallocator: nil),
-                  pcm.frameLength > 0 else { return }
-            let host = inInputTime.pointee.mFlags.contains(.hostTimeValid)
-                ? inInputTime.pointee.mHostTime : mach_absolute_time()
-            self.lastCallback.store(mach_absolute_time(), ordering: .relaxed)
-            writer.append(pcm, hostTime: host)  // converts (copies) before returning
+            // The buffer wraps `one` without copying: use it only inside this scope.
+            withUnsafeMutablePointer(to: &one) { list in
+                guard let pcm = AVAudioPCMBuffer(pcmFormat: mono, bufferListNoCopy: list, deallocator: nil),
+                      pcm.frameLength > 0 else { return }
+                self.lastCallback.store(mach_absolute_time(), ordering: .relaxed)
+                writer.append(pcm, hostTime: inInputTime.pointee.hostTimeOrNow)  // copies before returning
+            }
         }, "AudioDeviceCreateIOProcIDWithBlock")
         try check(AudioDeviceStart(dev, procID), "AudioDeviceStart")
     }
 
-    /// Format of the device's first input stream as IO procs see it.
     private static func inputFormat(_ dev: AudioDeviceID) -> AVAudioFormat? {
-        var addr = propAddress(kAudioDevicePropertyStreamFormat, scope: kAudioObjectPropertyScopeInput)
-        var asbd = AudioStreamBasicDescription()
-        var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
-        guard AudioObjectGetPropertyData(dev, &addr, 0, nil, &size, &asbd) == noErr,
-              asbd.mSampleRate > 0, asbd.mChannelsPerFrame > 0 else { return nil }
+        guard var asbd = inputStreamFormat(dev) else { return nil }
         return AVAudioFormat(streamDescription: &asbd)
     }
 
