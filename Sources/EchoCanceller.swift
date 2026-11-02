@@ -3,12 +3,27 @@ import Foundation
 
 /// Offline acoustic echo cancellation: removes the speaker playback (system track) from the mic track.
 /// Both tracks start at the same moment; ffmpeg decodes them to 48 kHz mono PCM, which runs through
-/// WebRTC AEC3 (+ high-pass, low noise suppression) in 10 ms frames. Output: AAC 48 kHz mono in CAF.
+/// WebRTC AEC3 (+ high-pass, low noise suppression) in 10 ms frames.
+/// Output: lossless 16-bit PCM, 48 kHz mono; the container follows the extension (.caf or .wav).
+/// On failure the partial output is removed.
 enum EchoCanceller {
     static let rate = 48000
     static let noiseSuppression: Int32 = 1  // 0=off 1=low 2=moderate 3=high 4=very high
+    static let outputExtensions: Set<String> = ["caf", "wav"]
 
     static func process(system: URL, mic: URL, output: URL, progress: ((Double) -> Void)? = nil) throws {
+        guard outputExtensions.contains(output.pathExtension.lowercased()) else {
+            throw CAError(what: "AEC output must be .caf or .wav: \(output.lastPathComponent)", status: -1)
+        }
+        do {
+            try run(system: system, mic: mic, output: output, progress: progress)
+        } catch {
+            try? FileManager.default.removeItem(at: output)
+            throw error
+        }
+    }
+
+    private static func run(system: URL, mic: URL, output: URL, progress: ((Double) -> Void)?) throws {
         let expected = max(1, Finalizer.duration(mic) * Double(rate))
         let refStream = try PCMStream(url: system)
         let micStream = try PCMStream(url: mic)
@@ -20,11 +35,12 @@ enum EchoCanceller {
         defer { wrtc_apm_destroy(apm) }
         let frame = Int(wrtc_apm_frame_size(apm))
 
-        let outFmt = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: Double(rate), channels: 1, interleaved: false)!
+        // The APM works on Int16; write those samples as they are (no float round trip).
+        let outFmt = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: Double(rate), channels: 1, interleaved: false)!
         let file = try AVAudioFile(forWriting: output, settings: [
-            AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: rate,
-            AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 64_000,
-        ], commonFormat: .pcmFormatFloat32, interleaved: false)
+            AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: rate, AVNumberOfChannelsKey: 1,
+            AVLinearPCMBitDepthKey: 16, AVLinearPCMIsFloatKey: false, AVLinearPCMIsBigEndianKey: false,
+        ], commonFormat: .pcmFormatInt16, interleaved: false)
         let chunkFrames = frame * 100  // 1 s at a time
         let buf = AVAudioPCMBuffer(pcmFormat: outFmt, frameCapacity: AVAudioFrameCount(chunkFrames))!
         var micChunk = [Int16](repeating: 0, count: chunkFrames)
@@ -47,8 +63,8 @@ enum EchoCanceller {
                     }
                 }
             }
-            let out = buf.floatChannelData![0]
-            for i in 0..<nMic { out[i] = Float(micChunk[i]) / 32768 }
+            let out = buf.int16ChannelData![0]
+            for i in 0..<nMic { out[i] = micChunk[i] }
             buf.frameLength = AVAudioFrameCount(nMic)
             try file.write(from: buf)
             progress?(Double(total) / expected)

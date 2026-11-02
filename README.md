@@ -49,18 +49,30 @@ Preferences (⌘,) let you change the hotkey, language, echo cancellation and mo
 
 ## Automation
 
-```bash
-open "meetingrecorder://start"
-open "meetingrecorder://stop"
-```
-
-For everything else, see **Preferences › Agent**, or run:
+The app binary doubles as a command-line tool:
 
 ```bash
-build/MeetingRecorder.app/Contents/MacOS/MeetingRecorder --help
+mr=/Applications/MeetingRecorder.app/Contents/MacOS/MeetingRecorder   # or build/MeetingRecorder.app/…
+
+dir=$($mr start --wait)          # starts recording (launching the app if needed), prints the folder
+$mr stop --wait                  # returns once the recording is saved; exit 0 if it is complete
+$mr status                       # JSON: idle / recording / saving, and the latest recording
+
+$mr aec --system call.caf --mic me.caf -o me_clean.wav    # remove speaker echo from a mic track
+$mr mix --system call.caf --mic me_clean.wav -o meeting.m4a
 ```
 
-**Run After Saving** (Preferences › Agent) runs a command of your choice after each recording, e.g. a transcription script, with the recording folder as `$1`.
+Results (a folder or file path, or JSON) go to stdout; messages and progress go to stderr.
+Exit codes: `0` ok, `1` failed, `2` bad usage, `3` timed out. `$mr help` lists everything.
+`open "meetingrecorder://start"` and `…://stop` work too, without waiting.
+
+**Run After Saving** (Preferences › Agent) runs a command of your choice after each recording, e.g. a transcription script, with the recording folder as `$1`. Its progress and exit status appear in `raw/session.json` under `after_save`.
+
+To save recordings somewhere else:
+
+```bash
+defaults write com.junyi.MeetingRecorder recordingsFolder -string ~/Meetings
+```
 
 ## License
 

@@ -59,10 +59,8 @@ final class RecordingSession {
     static let systemStallSeconds = 5.0
     static let lostAfterAttempts = 3
 
-    static var rootDirectory: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Documents/MeetingRecordings", isDirectory: true)
-    }
+    /// See AppSettings.recordingsFolder ($MEETINGRECORDER_ROOT, `recordingsFolder` default).
+    static var rootDirectory: URL { AppSettings.recordingsFolder }
 
     init(echoMode: EchoMode = AppSettings.echoMode) throws {
         self.echoMode = echoMode

@@ -5,12 +5,17 @@ import Foundation
 /// finish sessions left behind by a crash or a quit during processing (session.json status
 /// "recording" or "saving").
 ///
-///   raw/system.pcm.caf ─┬──────────────────────────────────┬─► mixed.m4a
-///   raw/mic.pcm.caf ────┴─► [WebRTC AEC3] ─► raw/mic_aec.caf ┘
-///   then raw/system.pcm.caf → raw/system.caf, raw/mic.pcm.caf → raw/mic.caf (AAC), PCM deleted.
+///   raw/system.pcm.caf ─┬──────────────────────────────────────┬─► mixed.m4a
+///   raw/mic.pcm.caf ────┴─► [WebRTC AEC3] ─► raw/mic_aec.pcm.caf ┘
+///   then each *.pcm.caf → *.caf (AAC: system, mic, mic_aec); a PCM file is deleted only after
+///   its AAC file checks out. Every intermediate is lossless.
+///
+/// Once AEC and the mix are done, session.json records `"processing": {"stage": "encoding"}`;
+/// a recovery from there only finishes the encoding (AEC/mix inputs may already be gone).
 enum Finalizer {
     static let systemPCM = "system.pcm.caf"
     static let micPCM = "mic.pcm.caf"
+    static let micAECPCM = "mic_aec.pcm.caf"
     static let rawFolder = "raw"
 
     /// Layout:  <session>/mixed.m4a  +  <session>/raw/{system,mic,mic_aec}.caf, session.json
@@ -18,7 +23,7 @@ enum Finalizer {
 
     /// Relative cost of each step, measured on 10 min of audio (M-series Mac); all scale with length.
     private enum Cost {
-        static let aec = 11.6, mix = 5.0, encodeSystem = 2.5, encodeMic = 1.5
+        static let aec = 11.6, mix = 5.0, encodeSystem = 2.5, encodeMic = 1.5, encodeMicAEC = 1.5
     }
 
     /// Processes `dir`, merges results into `meta`, writes session.json. Returns warnings.
@@ -33,15 +38,21 @@ enum Finalizer {
         let raw = rawDir(dir)
         try? FileManager.default.createDirectory(at: raw, withIntermediateDirectories: true)
         let f = { (name: String) in raw.appendingPathComponent(name) }
-        let sysPCM = f(systemPCM), micPCM = f(micPCM)
+        let sysPCM = f(systemPCM), micPCM = f(micPCM), aecPCM = f(micAECPCM)
         let hasSys = captured?.system ?? hasAudio(sysPCM)
         let hasMic = captured?.mic ?? hasAudio(micPCM)
+        let exists = { (u: URL) in FileManager.default.fileExists(atPath: u.path) }
+        // Resuming after AEC + mix completed: only the encoding is left.
+        let processing = meta["processing"] as? [String: Any]
+        let resumeEncoding = processing?["stage"] as? String == "encoding"
 
         // Progress: each step owns a slice of 0...1 sized by its cost.
-        let runAEC = echoMode == .webrtc && hasSys && hasMic
-        let total = (runAEC ? Cost.aec : 0) + (hasSys || hasMic ? Cost.mix : 0)
-            + (FileManager.default.fileExists(atPath: sysPCM.path) ? Cost.encodeSystem : 0)
-            + (FileManager.default.fileExists(atPath: micPCM.path) ? Cost.encodeMic : 0)
+        let runAEC = !resumeEncoding && echoMode == .webrtc && hasSys && hasMic
+        let runMix = !resumeEncoding && (hasSys || hasMic)
+        let total = (runAEC ? Cost.aec : 0) + (runMix ? Cost.mix : 0)
+            + (exists(sysPCM) ? Cost.encodeSystem : 0)
+            + (exists(micPCM) ? Cost.encodeMic : 0)
+            + (runAEC || exists(aecPCM) ? Cost.encodeMicAEC : 0)
         var doneCost = 0.0
         func step(_ cost: Double) -> (Double) -> Void {
             let base = doneCost
@@ -50,11 +61,11 @@ enum Finalizer {
         }
         progress?(0)
 
-        // 1. Echo cancellation on the lossless capture.
-        var aec = false
+        // 1. Echo cancellation on the lossless capture, to lossless PCM.
+        var aec = processing?["aec"] as? Bool ?? false
         if runAEC {
             do {
-                try EchoCanceller.process(system: sysPCM, mic: micPCM, output: f("mic_aec.caf"),
+                try EchoCanceller.process(system: sysPCM, mic: micPCM, output: aecPCM,
                                           progress: step(Cost.aec))
                 aec = true
             } catch {
@@ -62,30 +73,53 @@ enum Finalizer {
             }
         }
 
-        // 2. Loudness-matched mix.
-        var mixInfo = Mixer.Result()
-        var mixed = false
-        if hasSys || hasMic {
+        // 2. Loudness-matched mix, from lossless inputs only.
+        if !resumeEncoding { meta["mixed"] = NSNull() }
+        if runMix {
             do {
-                mixInfo = try Mixer.mix(system: hasSys ? sysPCM : nil,
-                                        mic: hasMic ? (aec ? f("mic_aec.caf") : micPCM) : nil,
-                                        output: dir.appendingPathComponent("mixed.m4a"),
-                                        progress: step(Cost.mix))
-                mixed = true
+                let info = try Mixer.mix(system: hasSys ? sysPCM : nil,
+                                         mic: hasMic ? (aec ? aecPCM : micPCM) : nil,
+                                         output: dir.appendingPathComponent("mixed.m4a"),
+                                         progress: step(Cost.mix))
+                meta["mixed"] = "mixed.m4a"
+                meta["mix_loudness_lufs"] = info.loudnessLUFS
+                meta["mix_gain_db"] = info.gainsDB
             } catch {
                 warnings.append(tr("Mixing failed (the tracks are kept): ") + "\(error)")
             }
         }
 
+        // Checkpoint: from here on, a recovery only re-runs the encoding below.
+        // Quit mid-way: steps may have failed only because they were killed; don't record them.
+        if Subprocesses.isQuitting { return warnings }
+        if !resumeEncoding {
+            meta["processing"] = ["stage": "encoding", "aec": aec]
+            meta["warnings"] = warnings
+            meta["status"] = "saving"  // still unfinished: recoverUnfinished picks it up
+            writeMeta(meta, to: dir)
+        }
+
         // 3. Encode tracks to AAC; drop the PCM only when the AAC file checks out.
+        if !aec { try? FileManager.default.removeItem(at: aecPCM) }  // partial output of a failed AEC
         var tracks = (meta["tracks"] as? [String: [String: Any]]) ?? [:]
         for (key, pcm, out, bitRate, has, cost) in [("system", sysPCM, f("system.caf"), 128_000, hasSys, Cost.encodeSystem),
-                                                    ("mic", micPCM, f("mic.caf"), 64_000, hasMic, Cost.encodeMic)] {
+                                                    ("mic", micPCM, f("mic.caf"), 64_000, hasMic, Cost.encodeMic),
+                                                    ("mic_aec", aecPCM, f("mic_aec.caf"), 64_000, aec, Cost.encodeMicAEC)] {
             var t = tracks[key] ?? [:]
-            let encodeProgress = FileManager.default.fileExists(atPath: pcm.path) ? step(cost) : { _ in }
-            t["duration_sec"] = duration(pcm)
-            if !FileManager.default.fileExists(atPath: pcm.path), FileManager.default.fileExists(atPath: out.path) {
+            let note = key == "mic_aec" ? ", WebRTC AEC3" : ""
+            let encodeProgress = exists(pcm) ? step(cost) : { _ in }
+            if !exists(pcm), exists(out), key != "mic_aec" || aec {
                 t["file"] = "\(rawFolder)/\(out.lastPathComponent)"  // encoded before a crash
+                t["duration_sec"] = duration(out)
+                t["format"] = "AAC 48kHz \(key == "system" ? "stereo" : "mono") \(bitRate / 1000)kbps" + note
+                tracks[key] = t
+                continue
+            }
+            t["duration_sec"] = duration(pcm)
+            // mic_aec is derived, not captured: without a successful AEC there is nothing to keep.
+            if key == "mic_aec" && !aec {
+                t["file"] = NSNull()
+                t["format"] = NSNull()
                 tracks[key] = t
                 continue
             }
@@ -100,24 +134,20 @@ enum Finalizer {
             do {
                 try encodeAAC(pcm, to: out, bitRate: bitRate, progress: encodeProgress)
                 t["file"] = "\(rawFolder)/\(out.lastPathComponent)"
-                t["format"] = "AAC 48kHz \(key == "system" ? "stereo" : "mono") \(bitRate / 1000)kbps"
+                t["format"] = "AAC 48kHz \(key == "system" ? "stereo" : "mono") \(bitRate / 1000)kbps" + note
                 if Subprocesses.isQuitting { return warnings }  // leave it for the next launch
                 try? FileManager.default.removeItem(at: pcm)
             } catch {
-                t["file"] = "\(rawFolder)/\(pcm.lastPathComponent)"  // keep the lossless capture
-                t["format"] = "PCM 16-bit 48kHz"
+                t["file"] = "\(rawFolder)/\(pcm.lastPathComponent)"  // keep the lossless file
+                t["format"] = "PCM 16-bit 48kHz" + note
                 warnings.append(tr("%@: AAC encoding failed, kept the PCM file: ", key) + "\(error)")
             }
             tracks[key] = t
         }
-        tracks["mic_aec"] = ["file": aec ? "\(rawFolder)/mic_aec.caf" : NSNull(),
-                             "format": "AAC 48kHz mono 64kbps, WebRTC AEC3"]
 
         meta["tracks"] = tracks
-        meta["mixed"] = mixed ? "mixed.m4a" : NSNull()
-        meta["mix_loudness_lufs"] = mixInfo.loudnessLUFS
-        meta["mix_gain_db"] = mixInfo.gainsDB
         meta["warnings"] = warnings
+        meta.removeValue(forKey: "processing")
         // Quit mid-way: steps may have failed only because they were killed. Keep status
         // "saving" so the next launch redoes the processing from the PCM files.
         if Subprocesses.isQuitting { return warnings }
@@ -147,7 +177,8 @@ enum Finalizer {
             }
             let raw = rawDir(dir)
             let dur = max(duration(raw.appendingPathComponent(systemPCM)), duration(raw.appendingPathComponent(micPCM)))
-            meta["status"] = "recovered_after_crash"
+            meta["status"] = "saving"
+            meta["final_status"] = "recovered_after_crash"
             meta["duration_sec"] = dur
             var w = (meta["warnings"] as? [String]) ?? []
             w.append(tr("The app quit unexpectedly while recording; recovered about %@ s from the capture files.", Int(dur)))
@@ -184,7 +215,7 @@ enum Finalizer {
 
     /// PCM CAF → AAC CAF with the system encoder (afconvert ships with macOS).
     /// afconvert has no progress output, so progress = output size / expected size.
-    private static func encodeAAC(_ input: URL, to output: URL, bitRate: Int,
+    static func encodeAAC(_ input: URL, to output: URL, bitRate: Int,
                                   progress: @escaping (Double) -> Void) throws {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/afconvert")
