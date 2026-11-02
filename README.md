@@ -123,7 +123,6 @@ Why capture is PCM: AAC in CAF needs a packet table written when the file is clo
 ## Acknowledgements
 
 - [webrtc-audio-processing](https://gitlab.freedesktop.org/pulseaudio/webrtc-audio-processing) (BSD) for AEC3
-- [quill](https://github.com/digimata/quill) (MIT) for ideas on process taps, capture recovery and voice processing setup
 - Menu bar icons from [Tabler Icons](https://tabler.io/icons) (MIT)
 
 ## License
