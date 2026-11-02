@@ -8,7 +8,8 @@ import Foundation
 /// (all tracks start at session start; sample N of every file is the same moment):
 ///   system.caf   everything the Mac played, AAC 48 kHz stereo
 ///   mic.caf      microphone, AAC 48 kHz mono (Apple-processed if echo mode = apple)
-///   mic_aec.caf  WebRTC AEC3 echo-cancelled mic (echo mode = webrtc)
+///   mic_aec.caf  mic processed by WebRTC: echo cancellation (echo mode = webrtc, system audio on),
+///                noise suppression and auto level as set (see Finalizer)
 ///   mixed.m4a    loudness-matched mix
 ///   session.json metadata, interruptions, warnings (written at start with status "recording")
 ///
@@ -39,6 +40,9 @@ final class RecordingSession: @unchecked Sendable {
     let echoMode: EchoMode
     /// Whether the system audio track is recorded (AppSettings.recordSystemAudio at start).
     let recordSystem: Bool
+    /// Mic processing after stop (settings at start; stored in session.json for recovery).
+    let noiseSuppression = AppSettings.noiseSuppression
+    let autoLevel = AppSettings.autoLevel
     private let startHost = mach_absolute_time()
     private let control = DispatchQueue(label: "session-control")
 
@@ -55,7 +59,8 @@ final class RecordingSession: @unchecked Sendable {
     private var systemStallHandled = false
     /// Input device the mic track last started on.
     private var micDeviceName: String?
-    /// Whether the mic track ran with Apple voice processing (not with a chosen non-default device).
+    /// Whether the mic track ran with Apple voice processing at any point (not with a chosen
+    /// non-default device). In session.json from the start, so crash recovery knows it too.
     private var micVoiceProcessing = false
 
     private var timer: DispatchSourceTimer?
@@ -225,6 +230,9 @@ final class RecordingSession: @unchecked Sendable {
             "status": status,
             "echo_cancellation": echoMode.rawValue,
             "system_audio": recordSystem,
+            "noise_suppression": noiseSuppression.rawValue,
+            "auto_level": autoLevel,
+            "mic_voice_processing": micVoiceProcessing,
             "mic_device": micDeviceName ?? NSNull(),
             "alignment": "all tracks start at session start; no offsets needed",
             "interruptions": interruptions.map { i -> [String: Any] in
@@ -275,7 +283,7 @@ final class RecordingSession: @unchecked Sendable {
             do { try r.start(writer: micWriter) } catch { return "\(error)" }
             mic = r
             micDeviceName = r.inputDeviceName
-            micVoiceProcessing = r.voiceProcessingActive
+            micVoiceProcessing = micVoiceProcessing || r.voiceProcessingActive
         }
         trackStartedAt[track] = now()
         return nil

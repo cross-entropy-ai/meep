@@ -1,7 +1,6 @@
 /* MeetingRecorder UI strings. Key = English source text. */
 
 "Follow System" = "시스템 설정 따르기";
-"Echo cancellation failed (the mix uses the raw mic track): " = "에코 제거 실패(믹스에는 원본 마이크 트랙 사용): ";
 "Mixing failed (the tracks are kept): " = "믹스 실패(개별 트랙은 보존됨): ";
 "%@: AAC encoding failed, kept the PCM file: " = "%@: AAC 인코딩 실패, PCM 파일을 유지함: ";
 "The app quit unexpectedly while recording; recovered about %@ s from the capture files." = "녹음 중 앱이 예기치 않게 종료되었습니다. 임시 파일에서 약 %@초를 복구했습니다.";
@@ -92,3 +91,13 @@
 "Input Device" = "입력 기기";
 "Record" = "녹음";
 "Saving" = "저장";
+"Input Level" = "입력 레벨";
+"Post-Processing" = "후처리";
+"Noise Suppression" = "소음 억제";
+"Auto Level" = "자동 레벨";
+"Low" = "낮음";
+"Moderate" = "보통";
+"High" = "높음";
+"Very High" = "매우 높음";
+"Handled by Apple Voice Processing." = "Apple 음성 처리가 담당합니다.";
+"Microphone processing failed (the mix uses the raw mic track): " = "마이크 처리 실패(믹스에는 원본 마이크 트랙 사용): ";

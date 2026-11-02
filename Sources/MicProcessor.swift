@@ -1,35 +1,59 @@
 import AVFoundation
 import Foundation
 
-/// Offline acoustic echo cancellation: removes the speaker playback (system track) from the mic track.
-/// Both tracks start at the same moment; ffmpeg decodes them to 48 kHz mono PCM, which runs through
-/// WebRTC AEC3 (+ high-pass, low noise suppression) in 10 ms frames.
+/// Offline processing of the mic track with WebRTC AudioProcessing, in 10 ms frames:
+/// echo cancellation (AEC3: removes the speaker playback, i.e. the system track, from the mic),
+/// noise suppression and automatic level (AGC2 adaptive digital gain), plus a high-pass filter.
+/// Tracks start at the same moment; ffmpeg decodes them to 48 kHz mono PCM.
 /// Output: lossless 16-bit PCM, 48 kHz mono; the container follows the extension (.caf or .wav).
 /// On failure the partial output is removed.
-enum EchoCanceller {
+enum MicProcessor {
     static let rate = 48000
-    static let noiseSuppression: Int32 = 1  // 0=off 1=low 2=moderate 3=high 4=very high
     static let outputExtensions: Set<String> = ["caf", "wav"]
 
-    static func process(system: URL, mic: URL, output: URL, progress: ((Double) -> Void)? = nil) throws {
+    struct Options: Equatable {
+        /// Echo cancellation; needs the system track.
+        var echoCancellation = true
+        var noiseSuppression = NoiseSuppression.low
+        var autoLevel = false
+
+        /// What runs, for session.json and the track's format note, e.g. "AEC3, noise suppression (low)".
+        var summary: String {
+            var steps: [String] = []
+            if echoCancellation { steps.append("AEC3") }
+            if noiseSuppression != .off { steps.append("noise suppression (\(noiseSuppression.rawValue))") }
+            if autoLevel { steps.append("AGC2") }
+            return steps.joined(separator: ", ")
+        }
+    }
+
+    /// `system` is required with echo cancellation and ignored without it.
+    static func process(system: URL?, mic: URL, output: URL, options: Options = Options(),
+                        progress: ((Double) -> Void)? = nil) throws {
         guard outputExtensions.contains(output.pathExtension.lowercased()) else {
-            throw CAError(what: "AEC output must be .caf or .wav: \(output.lastPathComponent)", status: -1)
+            throw CAError(what: "Mic processing output must be .caf or .wav: \(output.lastPathComponent)", status: -1)
+        }
+        guard !options.echoCancellation || system != nil else {
+            throw CAError(what: "Echo cancellation needs the system track", status: -1)
         }
         do {
-            try run(system: system, mic: mic, output: output, progress: progress)
+            try run(system: options.echoCancellation ? system : nil, mic: mic, output: output,
+                    options: options, progress: progress)
         } catch {
             try? FileManager.default.removeItem(at: output)
             throw error
         }
     }
 
-    private static func run(system: URL, mic: URL, output: URL, progress: ((Double) -> Void)?) throws {
+    private static func run(system: URL?, mic: URL, output: URL, options: Options,
+                            progress: ((Double) -> Void)?) throws {
         let expected = max(1, Finalizer.duration(mic) * Double(rate))
-        let refStream = try PCMStream(url: system)
+        let refStream = try system.map(PCMStream.init(url:))
         let micStream = try PCMStream(url: mic)
-        defer { refStream.close(); micStream.close() }
+        defer { refStream?.close(); micStream.close() }
 
-        guard let apm = wrtc_apm_create(Int32(rate), noiseSuppression) else {
+        guard let apm = wrtc_apm_create(Int32(rate), refStream != nil ? 1 : 0,
+                                        Int32(options.noiseSuppression.webrtcLevel), options.autoLevel ? 1 : 0) else {
             throw CAError(what: "WebRTC APM init", status: -1)
         }
         defer { wrtc_apm_destroy(apm) }
@@ -51,7 +75,7 @@ enum EchoCanceller {
             let nMic = micStream.read(into: &micChunk)
             if nMic == 0 { break }
             total += nMic
-            let nRef = refStream.read(into: &refChunk)
+            let nRef = refStream?.read(into: &refChunk) ?? 0
             let frames = (nMic + frame - 1) / frame
             // Zero-fill: reference ended early, or the last partial frame.
             for i in min(nRef, frames * frame)..<(frames * frame) { refChunk[i] = 0 }
@@ -59,7 +83,8 @@ enum EchoCanceller {
             micChunk.withUnsafeMutableBufferPointer { m in
                 refChunk.withUnsafeBufferPointer { r in
                     for f in 0..<frames {  // mic is processed in place
-                        _ = wrtc_apm_process(apm, r.baseAddress! + f * frame, m.baseAddress! + f * frame)
+                        _ = wrtc_apm_process(apm, refStream == nil ? nil : r.baseAddress! + f * frame,
+                                             m.baseAddress! + f * frame)
                     }
                 }
             }
@@ -85,7 +110,7 @@ final class PCMStream {
         let pipe = Pipe()
         process.executableURL = URL(fileURLWithPath: ffmpeg)
         process.arguments = ["-v", "error", "-i", url.path,
-                             "-ac", "1", "-ar", String(EchoCanceller.rate), "-f", "s16le", "-"]
+                             "-ac", "1", "-ar", String(MicProcessor.rate), "-f", "s16le", "-"]
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
         try Subprocesses.run(process)

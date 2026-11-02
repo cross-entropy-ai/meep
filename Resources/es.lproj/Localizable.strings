@@ -1,7 +1,6 @@
 /* MeetingRecorder UI strings. Key = English source text. */
 
 "Follow System" = "Según el sistema";
-"Echo cancellation failed (the mix uses the raw mic track): " = "Error en la cancelación de eco (la mezcla usa la pista original del micrófono): ";
 "Mixing failed (the tracks are kept): " = "Error al mezclar (se conservan las pistas): ";
 "%@: AAC encoding failed, kept the PCM file: " = "%@: error al codificar en AAC, se conservó el archivo PCM: ";
 "The app quit unexpectedly while recording; recovered about %@ s from the capture files." = "La app se cerró inesperadamente durante la grabación; se recuperaron unos %@ s de los archivos de captura.";
@@ -92,3 +91,13 @@
 "Input Device" = "Dispositivo de entrada";
 "Record" = "Grabar";
 "Saving" = "Guardado";
+"Input Level" = "Nivel de entrada";
+"Post-Processing" = "Posprocesamiento";
+"Noise Suppression" = "Supresión de ruido";
+"Auto Level" = "Nivel automático";
+"Low" = "Baja";
+"Moderate" = "Media";
+"High" = "Alta";
+"Very High" = "Muy alta";
+"Handled by Apple Voice Processing." = "Lo gestiona el procesamiento de voz de Apple.";
+"Microphone processing failed (the mix uses the raw mic track): " = "Error al procesar el micrófono (la mezcla usa la pista sin procesar): ";

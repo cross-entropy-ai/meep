@@ -164,7 +164,8 @@ enum HelpText {
           mixed.m4a          system audio + microphone, loudness-matched
           raw/system.caf     what the Mac played (other participants)
           raw/mic.caf        microphone (you)
-          raw/mic_aec.caf    microphone with speaker echo removed (WebRTC mode)
+          raw/mic_aec.caf    microphone after WebRTC post-processing: echo cancellation,
+                             noise suppression, auto level (what ran: mic_processing in session.json)
           raw/session.json   status, timing, interruptions, warnings, after_save
           All tracks start at the same moment: sample N of every file is the same instant.
           Folder: $MEETINGRECORDER_ROOT, else

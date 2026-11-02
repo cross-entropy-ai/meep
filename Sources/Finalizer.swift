@@ -7,11 +7,14 @@ import Synchronization
 /// "recording" or "saving").
 ///
 ///   raw/system.pcm.caf ─┬──────────────────────────────────────┬─► mixed.m4a
-///   raw/mic.pcm.caf ────┴─► [WebRTC AEC3] ─► raw/mic_aec.pcm.caf ┘
+///   raw/mic.pcm.caf ────┴─► [WebRTC APM] ──► raw/mic_aec.pcm.caf ┘
 ///   then each *.pcm.caf → *.caf (AAC: system, mic, mic_aec); a PCM file is deleted only after
 ///   its AAC file checks out. Every intermediate is lossless.
+///   WebRTC APM = echo cancellation (needs the system track) + noise suppression + auto level, as
+///   set at recording time. mic_aec keeps its name (scripts rely on it) also when only noise
+///   suppression / auto level ran.
 ///
-/// Once AEC and the mix are done, session.json records `"processing": {"stage": "encoding"}`;
+/// Once mic processing and the mix are done, session.json records `"processing": {"stage": "encoding"}`;
 /// a recovery from there only finishes the encoding (AEC/mix inputs may already be gone).
 enum Finalizer {
     static let systemPCM = "system.pcm.caf"
@@ -47,8 +50,22 @@ enum Finalizer {
         let processing = meta["processing"] as? [String: Any]
         let resumeEncoding = processing?["stage"] as? String == "encoding"
 
+        // Mic processing, from the settings stored at recording time (older sessions: low noise
+        // suppression with echo cancellation, as before). Apple voice processing already did
+        // its own noise suppression and gain.
+        // Older sessions only have tracks.mic.processing, and only after a clean stop.
+        let tracksIn = meta["tracks"] as? [String: [String: Any]]
+        let appleProcessed = echoMode == .apple && (meta["mic_voice_processing"] as? Bool
+            ?? ((tracksIn?["mic"]?["processing"] as? String ?? "Apple voice processing") != "none"))
+        var options = MicProcessor.Options(
+            echoCancellation: echoMode == .webrtc && hasSys && hasMic,
+            noiseSuppression: (meta["noise_suppression"] as? String).flatMap(NoiseSuppression.init(rawValue:)) ?? .low,
+            autoLevel: meta["auto_level"] as? Bool ?? false)
+        if appleProcessed { options.noiseSuppression = .off; options.autoLevel = false }
+        if !options.echoCancellation && meta["noise_suppression"] == nil { options.noiseSuppression = .off }
+
         // Progress: each step owns a slice of 0...1 sized by its cost.
-        let runAEC = !resumeEncoding && echoMode == .webrtc && hasSys && hasMic
+        let runAEC = !resumeEncoding && hasMic && !options.summary.isEmpty
         let runMix = !resumeEncoding && (hasSys || hasMic)
         let total = (runAEC ? Cost.aec : 0) + (runMix ? Cost.mix : 0)
             + (exists(sysPCM) ? Cost.encodeSystem : 0)
@@ -66,11 +83,12 @@ enum Finalizer {
         var aec = processing?["aec"] as? Bool ?? false
         if runAEC {
             do {
-                try EchoCanceller.process(system: sysPCM, mic: micPCM, output: aecPCM,
-                                          progress: step(Cost.aec))
+                try MicProcessor.process(system: hasSys ? sysPCM : nil, mic: micPCM, output: aecPCM,
+                                         options: options, progress: step(Cost.aec))
                 aec = true
+                meta["mic_processing"] = options.summary
             } catch {
-                warnings.append(tr("Echo cancellation failed (the mix uses the raw mic track): ") + "\(error)")
+                warnings.append(tr("Microphone processing failed (the mix uses the raw mic track): ") + "\(error)")
             }
         }
 
@@ -107,7 +125,7 @@ enum Finalizer {
                                                     ("mic", micPCM, f("mic.caf"), 64_000, hasMic, Cost.encodeMic),
                                                     ("mic_aec", aecPCM, f("mic_aec.caf"), 64_000, aec, Cost.encodeMicAEC)] {
             var t = tracks[key] ?? [:]
-            let note = key == "mic_aec" ? ", WebRTC AEC3" : ""
+            let note = key == "mic_aec" ? ", WebRTC " + (meta["mic_processing"] as? String ?? "AEC3") : ""
             let encodeProgress = exists(pcm) ? step(cost) : { _ in }
             if !exists(pcm), exists(out), key != "mic_aec" || aec {
                 t["file"] = "\(rawFolder)/\(out.lastPathComponent)"  // encoded before a crash

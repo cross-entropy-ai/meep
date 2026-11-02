@@ -5,6 +5,22 @@ enum EchoMode: String, CaseIterable {
     case off, apple, webrtc
 }
 
+/// Mic noise suppression strength (WebRTC). Applied after recording, with echo cancellation.
+enum NoiseSuppression: String, CaseIterable {
+    case off, low, moderate, high
+    case veryHigh = "very_high"
+
+    var webrtcLevel: Int {
+        switch self {
+        case .off: 0
+        case .low: 1
+        case .moderate: 2
+        case .high: 3
+        case .veryHigh: 4
+        }
+    }
+}
+
 /// User settings (UserDefaults domain com.junyi.MeetingRecorder).
 /// CLI: `defaults write com.junyi.MeetingRecorder echoCancellation -string off|apple|webrtc`
 enum AppSettings {
@@ -46,6 +62,18 @@ enum AppSettings {
     static var inputDeviceName: String {
         get { d.string(forKey: "inputDeviceName") ?? "" }
         set { d.set(newValue, forKey: "inputDeviceName") }
+    }
+
+    /// Mic noise suppression (default low, what WebRTC echo cancellation always applied before).
+    static var noiseSuppression: NoiseSuppression {
+        get { d.string(forKey: "noiseSuppression").flatMap(NoiseSuppression.init(rawValue:)) ?? .low }
+        set { d.set(newValue.rawValue, forKey: "noiseSuppression") }
+    }
+
+    /// Even out the mic level over the recording (WebRTC AGC2). Default off.
+    static var autoLevel: Bool {
+        get { d.bool(forKey: "autoLevel") }
+        set { d.set(newValue, forKey: "autoLevel") }
     }
 
     /// Show the elapsed time next to the menu bar icon while recording (default on).

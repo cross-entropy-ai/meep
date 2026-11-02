@@ -1,7 +1,6 @@
 /* MeetingRecorder UI strings. Key = English source text. */
 
 "Follow System" = "跟隨系統";
-"Echo cancellation failed (the mix uses the raw mic track): " = "回音消除失敗（混音改用原始麥克風音軌）：";
 "Mixing failed (the tracks are kept): " = "混音失敗（分軌檔案仍保留）：";
 "%@: AAC encoding failed, kept the PCM file: " = "%@ 轉 AAC 失敗，保留了 PCM 檔案：";
 "The app quit unexpectedly while recording; recovered about %@ s from the capture files." = "錄製時程式意外結束；已從暫存檔復原約 %@ 秒。";
@@ -92,3 +91,13 @@
 "Input Device" = "輸入裝置";
 "Record" = "錄製";
 "Saving" = "儲存";
+"Input Level" = "輸入音量";
+"Post-Processing" = "後處理";
+"Noise Suppression" = "降噪";
+"Auto Level" = "自動音量";
+"Low" = "低";
+"Moderate" = "中";
+"High" = "高";
+"Very High" = "很高";
+"Handled by Apple Voice Processing." = "由 Apple 語音處理負責。";
+"Microphone processing failed (the mix uses the raw mic track): " = "麥克風處理失敗（混音使用原始麥克風音軌）：";

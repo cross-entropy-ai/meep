@@ -38,6 +38,9 @@ final class AppState {
     var inputDeviceUID = AppSettings.inputDeviceUID
     /// Tells a running recording to switch devices.
     @ObservationIgnored var onInputDeviceChange: () -> Void = {}
+    /// Whether the mic track would record the system default input (true also when the chosen
+    /// device is the default, or is disconnected). Only then can Apple voice processing run.
+    var recordsDefaultInput = true
     var micPermission = Permissions.microphone
     var systemAudioPermission = Permissions.systemAudio
     @ObservationIgnored private var deviceListener: HardwareListener?
@@ -48,6 +51,58 @@ final class AppState {
         inputDevices = listInputDevices()
         micPermission = Permissions.microphone
         systemAudioPermission = Permissions.systemAudio
+        let target = preferredInputDevice()
+        recordsDefaultInput = target == (try? defaultDevice(output: false))
+        // Follow the device the mic track would record from now (selection, default, plug-in),
+        // and stop if mic access was revoked.
+        if meterWanted, meter?.device != target || (meter != nil && micPermission != .authorized) {
+            startMeter()
+        }
+    }
+
+    // MARK: Input level meter
+
+    /// Displayed input level, 0...1 (-60...0 dBFS, falls back slowly).
+    var inputLevel: Float = 0
+    @ObservationIgnored private var meter: InputLevelMeter?
+    @ObservationIgnored private var meterTimer: Timer?
+    @ObservationIgnored private var meterWanted = false
+
+    /// Meters the mic track's input device while the Audio tab is visible. Opening the device
+    /// turns on the mic indicator, so this runs only then, and only with mic access.
+    func startMeter() {
+        meterWanted = true
+        stopMeterDevice()
+        guard micPermission == .authorized, let dev = preferredInputDevice(),
+              let m = InputLevelMeter(device: dev) else { return }
+        meter = m
+        let timer = Timer(timeInterval: 1.0 / 20, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.tickMeter() }  // runs on the main run loop
+        }
+        RunLoop.main.add(timer, forMode: .common)  // keeps ticking while a menu is open
+        meterTimer = timer
+    }
+
+    func stopMeter() {
+        meterWanted = false
+        stopMeterDevice()
+    }
+
+    private func stopMeterDevice() {
+        meterTimer?.invalidate(); meterTimer = nil
+        meter?.stop(); meter = nil
+        inputLevel = 0
+    }
+
+    private func tickMeter() {
+        guard let meter else { return }
+        let peak = meter.readPeak()
+        let db = peak > 0 ? 20 * log10(peak) : -60
+        let target = Float(max(0, min(1, (db + 60) / 60)))
+        // Rise at once, fall ~1 unit per second. Assign only on change: every assignment
+        // invalidates the views that read it.
+        let next = max(target, inputLevel - 0.05)
+        if next != inputLevel { inputLevel = next }
     }
 
     /// Keeps the sources current: default input changes, and permissions changed in System
@@ -68,6 +123,7 @@ final class AppState {
         AppSettings.inputDeviceUID = uid
         if let d = inputDevices.first(where: { $0.uid == uid }) { AppSettings.inputDeviceName = d.name }
         onInputDeviceChange()
+        refreshSources()
     }
 
     /// Asks once; after a decision only System Settings can change it.
@@ -79,6 +135,7 @@ final class AppState {
         Task {
             _ = await Permissions.requestMicrophone()
             refreshSources()
+            if meterWanted { startMeter() }
         }
     }
 
@@ -268,12 +325,14 @@ struct GeneralPreferencesView: View {
 
 // MARK: - Audio
 
-/// Per source (microphone, system audio): access, and what is recorded and how.
+/// Per source (microphone, system audio): access and what is recorded; then post-processing.
 struct AudioPreferencesView: View {
     let state: AppState
     @AppStorage("language") private var language = AppLanguage.system.rawValue
     @AppStorage("echoCancellation") private var echoRaw = EchoMode.webrtc.rawValue
     @AppStorage("recordSystemAudio") private var recordSystemAudio = true
+    @AppStorage("noiseSuppression") private var noiseRaw = NoiseSuppression.low.rawValue
+    @AppStorage("autoLevel") private var autoLevel = false
 
     var body: some View {
         Form {
@@ -292,6 +351,9 @@ struct AudioPreferencesView: View {
                             .tag(state.inputDeviceUID)
                     }
                 }
+                if state.micPermission == .authorized {
+                    InputLevelRow(state: state)  // its own view: only it redraws as the level moves
+                }
             }
 
             Section(tr("System Audio")) {
@@ -301,11 +363,14 @@ struct AudioPreferencesView: View {
                     if state.isRecording { Text(tr("Can't change while recording.")) }  // rendered as a subtitle
                 }
                 .disabled(state.isRecording)
+            }
+
+            Section(tr("Post-Processing")) {
                 Picker(selection: $echoRaw) {
                     ForEach(EchoMode.allCases, id: \.rawValue) { Text($0.shortTitle).tag($0.rawValue) }
                 } label: {
                     Text(tr("Echo Cancellation"))
-                    // Rendered as a subtitle, same as Recordings Folder.
+                    // Rendered as a subtitle.
                     if state.isRecording {
                         Text(tr("Can't change while recording."))
                     } else if !recordSystemAudio {
@@ -315,13 +380,43 @@ struct AudioPreferencesView: View {
                     }
                 }
                 .disabled(state.isRecording || !recordSystemAudio)
+                Picker(selection: $noiseRaw) {
+                    ForEach(NoiseSuppression.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) }
+                } label: {
+                    Text(tr("Noise Suppression"))
+                    micProcessingNote
+                }
+                .disabled(state.isRecording || appleProcessesMic)
+                Toggle(isOn: $autoLevel) {
+                    Text(tr("Auto Level"))
+                    micProcessingNote
+                }
+                .disabled(state.isRecording || appleProcessesMic)
             }
         }
         .formStyle(.grouped)
         .frame(width: 500)
         .fixedSize()
-        .onAppear { state.watchSources() }
+        .onAppear {
+            state.watchSources()
+            state.startMeter()
+        }
+        .onDisappear { state.stopMeter() }
         .onChange(of: echoRaw) { _, _ in state.onChange() }
+    }
+
+    /// Apple voice processing does its own noise suppression and gain; it runs with system audio
+    /// on and the system default input (see MicRecorder).
+    private var appleProcessesMic: Bool {
+        echoRaw == EchoMode.apple.rawValue && recordSystemAudio && state.recordsDefaultInput
+    }
+
+    @ViewBuilder private var micProcessingNote: some View {
+        if state.isRecording {
+            Text(tr("Can't change while recording."))
+        } else if appleProcessesMic {
+            Text(tr("Handled by Apple Voice Processing."))
+        }
     }
 
     private func permissionRow(_ title: String, status: PermissionStatus,
@@ -490,6 +585,9 @@ private func abbreviate(_ path: String) -> String {
 /// A single reusable preferences window with toolbar tabs (General / Audio / Agent / About).
 @MainActor
 final class PreferencesWindowController: NSWindowController {
+    private var state: AppState?
+    private var closeObserver: Any?
+
     enum Tab: Int, CaseIterable {
         case general, audio, agent, about
 
@@ -533,6 +631,11 @@ final class PreferencesWindowController: NSWindowController {
         window.toolbarStyle = .preference
         window.isReleasedWhenClosed = false
         self.init(window: window)
+        self.state = state
+        // The level meter keeps the mic open; never leave it running behind a closed window.
+        closeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: window, queue: .main
+        ) { _ in MainActor.assumeIsolated { state.stopMeter() } }
         relabel()
     }
 
@@ -548,12 +651,51 @@ final class PreferencesWindowController: NSWindowController {
 
     func show(tab: Tab? = nil) {
         NSApp.activate(ignoringOtherApps: true)
-        if window?.isVisible == false { window?.center() }
+        let reopening = window?.isVisible == false
+        if reopening { window?.center() }
         window?.makeKeyAndOrderFront(nil)
         // Select after the window (and the tab view) has loaded; selecting earlier gets reset.
-        if let tab, let tabs = contentViewController as? NSTabViewController {
-            tabs.selectedTabViewItemIndex = tab.rawValue
+        guard let tabs = contentViewController as? NSTabViewController else { return }
+        if let tab { tabs.selectedTabViewItemIndex = tab.rawValue }
+        // Reopened on the Audio tab: its view did not reappear, so restart the meter here.
+        if reopening, tabs.selectedTabViewItemIndex == Tab.audio.rawValue { state?.startMeter() }
+    }
+}
+
+extension NoiseSuppression {
+    var title: String {
+        switch self {
+        case .off: return tr("Off")
+        case .low: return tr("Low")
+        case .moderate: return tr("Moderate")
+        case .high: return tr("High")
+        case .veryHigh: return tr("Very High")
         }
+    }
+}
+
+struct InputLevelRow: View {
+    let state: AppState
+    var body: some View {
+        LabeledContent(tr("Input Level")) { LevelBar(level: state.inputLevel) }
+    }
+}
+
+/// Horizontal input level meter (-60...0 dBFS).
+struct LevelBar: View {
+    let level: Float
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(.quaternary)
+                Capsule()
+                    .fill(level > 0.9 ? Color.red : (level > 0.75 ? Color.yellow : Color.green))
+                    .frame(width: geo.size.width * CGFloat(level))
+            }
+        }
+        .frame(width: 180, height: 6)
+        .accessibilityValue(Text(verbatim: "\(Int(level * 60 - 60)) dB"))
     }
 }
 

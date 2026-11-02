@@ -159,7 +159,7 @@ enum CLI {
                 throw UsageError(message: "aec needs --system <file> --mic <file> -o <out>, or <recording-dir> [out]")
             }
             let output = URL(fileURLWithPath: out)
-            try checkExtension(output, EchoCanceller.outputExtensions)
+            try checkExtension(output, MicProcessor.outputExtensions)
             try runAEC(system: try inputFile(system), mic: try inputFile(mic), output: output)
             print(output.path)
             return .ok
@@ -173,7 +173,7 @@ enum CLI {
         let mic = try firstExisting(raw, [Finalizer.micPCM, "mic.caf"])
         if a.positional.count == 2 {
             let out = URL(fileURLWithPath: a.positional[1])
-            try checkExtension(out, EchoCanceller.outputExtensions)
+            try checkExtension(out, MicProcessor.outputExtensions)
             try runAEC(system: system, mic: mic, output: out)
             print(out.path)
         } else {
@@ -218,7 +218,7 @@ enum CLI {
 
     static func runAEC(system: URL, mic: URL, output: URL) throws {
         defer { progressDone() }
-        try EchoCanceller.process(system: system, mic: mic, output: output, progress: progress("aec"))
+        try MicProcessor.process(system: system, mic: mic, output: output, progress: progress("aec"))
     }
 
     /// Mixes, then prints the output path (or with `json`, a JSON object) on stdout and the
