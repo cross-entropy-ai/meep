@@ -61,7 +61,7 @@ cask "meep" do
   end
 
   depends_on arch: :arm64
-  depends_on macos: ">= :sequoia"
+  depends_on macos: :sequoia
 
   app "Meep.app"
   binary "#{appdir}/Meep.app/Contents/MacOS/Meep", target: "meep"

@@ -90,7 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             pendingCommand = nil
             run(command: cmd.command, quiet: cmd.quiet)
         } else {
-            Task { _ = await micPermission() }
+            Task { await askForAccess() }
         }
     }
 
@@ -196,6 +196,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         starting = true  // the permission prompt can take a while
         Task {
             let micAllowed = await micPermission()
+            if AppSettings.recordSystemAudio { await systemAudioPermission() }
             var failure: String?
             if !micAllowed && !AppSettings.recordSystemAudio {
                 failure = tr("No microphone access, and system audio recording is off: there is nothing to record.")
@@ -371,6 +372,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return granted
         default: return false
         }
+    }
+
+    /// First launch: both prompts, one after the other, so recording works without a trip to
+    /// System Settings. Each is asked only while undecided.
+    private func askForAccess() async {
+        _ = await micPermission()
+        if AppSettings.recordSystemAudio { await systemAudioPermission() }
+    }
+
+    /// Asks for system audio access while undecided. macOS would otherwise not ask: the tap just
+    /// delivers silence.
+    private func systemAudioPermission() async {
+        guard Permissions.systemAudio == .notDetermined else { return }
+        _ = await Permissions.requestSystemAudio()
+        appState.refreshSources()
     }
 
     @objc private func openFolder() {
