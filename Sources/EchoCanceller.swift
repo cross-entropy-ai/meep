@@ -81,7 +81,7 @@ final class PCMStream {
     private var eof = false
 
     init(url: URL) throws {
-        guard let ffmpeg = Mixer.ffmpegPath() else { throw CAError(what: "ffmpeg not found (brew install ffmpeg)", status: -1) }
+        guard let ffmpeg = Mixer.ffmpegPath() else { throw CAError(what: Mixer.ffmpegMissing, status: -1) }
         let pipe = Pipe()
         process.executableURL = URL(fileURLWithPath: ffmpeg)
         process.arguments = ["-v", "error", "-i", url.path,
