@@ -7,7 +7,7 @@ struct Shortcut: Equatable {
     var modifiers: NSEvent.ModifierFlags
     var keyLabel: String
 
-    static let `default` = Shortcut(keyCode: UInt16(kVK_ANSI_R), modifiers: [.command, .shift], keyLabel: "R")
+    static let `default` = Shortcut(keyCode: UInt16(kVK_ANSI_R), modifiers: [.control, .command], keyLabel: "R")
 
     /// e.g. "⌃⌥⇧⌘R" (Apple's canonical modifier order).
     var display: String {

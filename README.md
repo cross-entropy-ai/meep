@@ -15,7 +15,7 @@
 - Records both sides of any call (Zoom, Meet, Teams, a browser tab…) with no extra audio drivers
 - Removes speaker echo, so you can take calls without headphones
 - Keeps recording when you plug in or unplug headphones
-- One-click start/stop from the menu bar, or a global hotkey (⌘⇧R)
+- One-click start/stop from the menu bar, or a global hotkey (⌃⌘R)
 - Scriptable: start and stop from the Terminal, Shortcuts or an AI agent
 
 ## Install

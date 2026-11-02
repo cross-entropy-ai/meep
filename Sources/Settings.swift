@@ -160,7 +160,7 @@ enum AppSettings {
         set { d.set(newValue, forKey: "hideSilenceWarnings") }
     }
 
-    /// Global start/stop hotkey. nil = disabled. Default ⌘⇧R.
+    /// Global start/stop hotkey. nil = disabled. Default ⌃⌘R.
     static var hotKey: Shortcut? {
         get {
             guard d.object(forKey: "hotKeyCode") != nil else { return .default }

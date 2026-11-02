@@ -78,7 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.preferences.relabel()  // tab names follow the language setting
         }
 
-        // Global start/stop hotkey (default ⌘⇧R).
+        // Global start/stop hotkey (default ⌃⌘R).
         GlobalHotKey.shared.action = { [weak self] in self?.toggle() }
         GlobalHotKey.shared.register(AppSettings.hotKey)
         updateUI()
