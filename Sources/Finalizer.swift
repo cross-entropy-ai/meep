@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import Synchronization
 
 /// Turns a session's raw PCM capture into the final outputs. Used after a normal stop and to
 /// finish sessions left behind by a crash or a quit during processing (session.json status
@@ -197,7 +198,7 @@ enum Finalizer {
     }
 
     static func writeMeta(_ meta: [String: Any], to dir: URL) {
-        guard let data = try? JSONSerialization.data(withJSONObject: meta, options: [.prettyPrinted, .sortedKeys])
+        guard let data = try? JSONSerialization.data(withJSONObject: meta, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
         else { return }
         let raw = rawDir(dir)
         try? FileManager.default.createDirectory(at: raw, withIntermediateDirectories: true)
@@ -249,29 +250,32 @@ enum Finalizer {
 /// Child processes (ffmpeg, afconvert) still running, so they can be stopped when the app quits.
 /// Otherwise an orphaned encoder could keep writing a file that the next launch reprocesses.
 enum Subprocesses {
-    private static let lock = NSLock()
-    private static var running: [ObjectIdentifier: Process] = [:]
-    private static var quitting = false
+    private struct State {
+        var running: [ObjectIdentifier: Process] = [:]
+        var quitting = false
+    }
+    private static let state = Mutex(State())
 
     /// Set once the app is quitting: processing must not delete or finalize anything after that.
-    static var isQuitting: Bool { lock.lock(); defer { lock.unlock() }; return quitting }
+    static var isQuitting: Bool { state.withLock { $0.quitting } }
 
     static func run(_ p: Process) throws {
-        lock.lock(); defer { lock.unlock() }
-        if quitting { throw CAError(what: "app is quitting", status: -1) }
-        try p.run()
-        running[ObjectIdentifier(p)] = p
+        try state.withLock { s in
+            if s.quitting { throw CAError(what: "app is quitting", status: -1) }
+            try p.run()
+            s.running[ObjectIdentifier(p)] = p
+        }
     }
 
     static func finished(_ p: Process) {
-        lock.lock(); defer { lock.unlock() }
-        running[ObjectIdentifier(p)] = nil
+        state.withLock { _ = $0.running.removeValue(forKey: ObjectIdentifier(p)) }
     }
 
     static func terminateAll() {
-        lock.lock(); defer { lock.unlock() }
-        quitting = true
-        for p in running.values where p.isRunning { p.terminate() }
-        running.removeAll()
+        state.withLock { s in
+            s.quitting = true
+            for p in s.running.values where p.isRunning { p.terminate() }
+            s.running.removeAll()
+        }
     }
 }

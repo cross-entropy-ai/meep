@@ -14,7 +14,11 @@ import Foundation
 ///
 /// Capture recovery: default-device changes, device removal, engine reconfiguration and a 1 s
 /// watchdog restart the affected track; the TrackWriter pads the gap so the file stays continuous.
-final class RecordingSession {
+///
+/// Concurrency: capture state is confined to the `control` queue. stopCapture() lets exactly one
+/// caller through (the `stopped` flag, set on `control`); the stop results it fills in are read
+/// only after it returns.
+final class RecordingSession: @unchecked Sendable {
     enum Track: String { case mic, system }
 
     struct Interruption {
@@ -242,10 +246,11 @@ final class RecordingSession {
                 // The engine stops on a configuration change (voice processing even causes one
                 // itself right after starting). First just start the same engine again; rebuild
                 // only if it is still stopped a moment later. Stalls are the watchdog's job.
-                self?.control.async {
-                    guard let self, let r, self.mic === r else { return }
+                guard let self, let r else { return }
+                self.control.async { [self, r] in
+                    guard self.mic === r else { return }
                     r.resume()
-                    self.control.asyncAfter(deadline: .now() + 1.5) {
+                    self.control.asyncAfter(deadline: .now() + 1.5) { [self, r] in
                         guard self.mic === r, !r.isRunning, !r.resume() else { return }
                         self.scheduleRestart(.mic, reason: "route_changed")
                     }

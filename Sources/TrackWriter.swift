@@ -11,7 +11,11 @@ import Foundation
 /// - PCM CAF needs no finalization pass: if the process dies, what was written stays readable.
 ///   (AAC in CAF does NOT survive a crash: it needs a packet table written at close. So capture
 ///   is PCM, and the Finalizer encodes to AAC after stop.)
-final class TrackWriter {
+///
+/// Concurrency: one producer at a time calls append() (the current recorder's audio callback;
+/// a restarted recorder starts only after the old one has drained). All file state lives on
+/// `queue`; the counters are read after finish(), which syncs with the queue.
+final class TrackWriter: @unchecked Sendable {
     let url: URL
     let format: AVAudioFormat            // float32, non-interleaved, fixed rate/channels
     private var file: AVAudioFile?
@@ -44,7 +48,9 @@ final class TrackWriter {
     /// Converts `buffer` synchronously (so the caller's buffer can be reused right after),
     /// then pads + writes on the writer queue.
     func append(_ buffer: AVAudioPCMBuffer, hostTime: UInt64) {
-        guard buffer.frameLength > 0, let converted = convert(buffer) else { return }
+        guard buffer.frameLength > 0, let fresh = convert(buffer) else { return }
+        // `fresh` is a new buffer owned by this call; nothing else touches it after the handoff.
+        nonisolated(unsafe) let converted = fresh
         queue.async { [self] in
             guard file != nil else { return }
             peak = max(peak, converted.peakLevel())

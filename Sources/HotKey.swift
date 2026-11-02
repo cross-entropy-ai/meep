@@ -68,6 +68,7 @@ struct Shortcut: Equatable {
 }
 
 /// One system-wide hotkey via Carbon RegisterEventHotKey (no Accessibility permission needed).
+@MainActor
 final class GlobalHotKey {
     static let shared = GlobalHotKey()
     var action: (() -> Void)?

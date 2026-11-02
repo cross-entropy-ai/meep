@@ -8,7 +8,7 @@ enum EchoMode: String, CaseIterable {
 /// User settings (UserDefaults domain com.junyi.MeetingRecorder).
 /// CLI: `defaults write com.junyi.MeetingRecorder echoCancellation -string off|apple|webrtc`
 enum AppSettings {
-    private static let d = UserDefaults.standard
+    private static var d: UserDefaults { .standard }
 
     /// Where recordings are saved: $MEETINGRECORDER_ROOT, else the `recordingsFolder` default
     /// (a path, `~` expanded), else ~/Documents/MeetingRecordings. No UI; set it with

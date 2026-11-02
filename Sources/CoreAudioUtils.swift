@@ -52,12 +52,12 @@ func deviceIsAlive(_ dev: AudioDeviceID) -> Bool {
 }
 
 /// Listens to system-level audio hardware property changes (default devices, device list).
-final class HardwareListener {
+final class HardwareListener: @unchecked Sendable {  // registrations: owner's queue only
     private var registrations: [(AudioObjectPropertyAddress, AudioObjectPropertyListenerBlock)] = []
     private let queue: DispatchQueue
 
     init(queue: DispatchQueue, selectors: [AudioObjectPropertySelector],
-         handler: @escaping (AudioObjectPropertySelector) -> Void) {
+         handler: @escaping @Sendable (AudioObjectPropertySelector) -> Void) {
         self.queue = queue
         for sel in selectors {
             var addr = propAddress(sel)

@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// UI languages. Raw values are what's stored in UserDefaults ("zh" kept for existing settings).
 enum AppLanguage: String, CaseIterable {
@@ -57,19 +58,19 @@ enum L10n {
         return .en
     }()
 
-    private static var cache: (lproj: String, bundle: Bundle?)?
-    private static let lock = NSLock()
+    /// tr() is called from background threads too, hence the mutex.
+    private static let cache = Mutex<(lproj: String, bundle: Bundle?)?>(nil)
 
     /// The .lproj bundle for the current language setting (nil = English, use the key).
-    /// tr() is called from background threads too, hence the lock.
     static var bundle: Bundle? {
         let lproj = AppSettings.language.lproj
-        lock.lock(); defer { lock.unlock() }
-        if let c = cache, c.lproj == lproj { return c.bundle }
-        let b = lproj == "en" ? nil
-            : Bundle.main.path(forResource: lproj, ofType: "lproj").flatMap(Bundle.init(path:))
-        cache = (lproj, b)
-        return b
+        return cache.withLock { cache in
+            if let cache, cache.lproj == lproj { return cache.bundle }
+            let b = lproj == "en" ? nil
+                : Bundle.main.path(forResource: lproj, ofType: "lproj").flatMap(Bundle.init(path:))
+            cache = (lproj, b)
+            return b
+        }
     }
 }
 

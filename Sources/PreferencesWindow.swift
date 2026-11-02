@@ -1,28 +1,31 @@
 import AppKit
+import Observation
 import SwiftUI
 
-/// Shared UI state for the preferences window.
-/// (No @State in views: the SwiftUI macro plugin ships only with full Xcode, not the CLT.)
-final class AppState: ObservableObject {
-    @Published var isRecording = false
-    @Published var launchAtLogin = AppSettings.launchAtLogin
-    @Published var loginError: String?
-    @Published var justCopied: String?
+/// Shared UI state for the preferences window. Views read it directly; Observation tracks access.
+/// (No @State in views: the SwiftUI macro plugin ships only with full Xcode, not the CLT. The
+/// Observation macros ship with the Swift toolchain, so @Observable works.)
+@MainActor @Observable
+final class AppState {
+    var isRecording = false
+    var launchAtLogin = AppSettings.launchAtLogin
+    var loginError: String?
+    var justCopied: String?
 
     // Hotkey
-    @Published var hotKey: Shortcut? = AppSettings.hotKey
-    @Published var isCapturingHotKey = false
-    @Published var hotKeyError: String?
-    private var keyMonitor: Any?
+    var hotKey: Shortcut? = AppSettings.hotKey
+    var isCapturingHotKey = false
+    var hotKeyError: String?
+    @ObservationIgnored private var keyMonitor: Any?
 
     // Updates
-    enum UpdateStatus: Equatable {
+    enum UpdateStatus: Equatable, Sendable {
         case idle, checking, upToDate, available(version: String, url: URL), failed(String)
     }
-    @Published var update: UpdateStatus = .idle
+    var update: UpdateStatus = .idle
 
     /// Called when a setting that affects the menu bar changes.
-    var onChange: () -> Void = {}
+    @ObservationIgnored var onChange: () -> Void = {}
 
     func setLaunchAtLogin(_ on: Bool) {
         do {
@@ -38,8 +41,9 @@ final class AppState: ObservableObject {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         justCopied = id
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            if self?.justCopied == id { self?.justCopied = nil }
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            if justCopied == id { justCopied = nil }
         }
     }
 
@@ -101,30 +105,32 @@ final class AppState: ObservableObject {
         update = .checking
         var req = URLRequest(url: api)
         req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        URLSession.shared.dataTask(with: req) { data, response, error in
-            let result: UpdateStatus
-            if let error {
-                result = .failed(error.localizedDescription)
-            } else if let data,
-                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let tag = json["tag_name"] as? String,
-                      let page = (json["html_url"] as? String).flatMap(URL.init(string:)) {
-                let latest = tag.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
-                result = latest.compare(AppInfo.version, options: .numeric) == .orderedDescending
-                    ? .available(version: latest, url: page) : .upToDate
-            } else {
-                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-                result = .failed(code == 404 ? tr("No releases found for %@.", repo) : tr("Unexpected response (HTTP %@).", code))
-            }
-            DispatchQueue.main.async { self.update = result }
-        }.resume()
+        Task {
+            update = await Self.latestRelease(req, repo: repo)
+        }
+    }
+
+    private nonisolated static func latestRelease(_ req: URLRequest, repo: String) async -> UpdateStatus {
+        let data: Data, response: URLResponse
+        do { (data, response) = try await URLSession.shared.data(for: req) } catch {
+            return .failed(error.localizedDescription)
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let tag = json["tag_name"] as? String,
+              let page = (json["html_url"] as? String).flatMap(URL.init(string:)) else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            return .failed(code == 404 ? tr("No releases found for %@.", repo) : tr("Unexpected response (HTTP %@).", code))
+        }
+        let latest = tag.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
+        return latest.compare(AppInfo.version, options: .numeric) == .orderedDescending
+            ? .available(version: latest, url: page) : .upToDate
     }
 }
 
 // MARK: - General
 
 struct GeneralPreferencesView: View {
-    @ObservedObject var state: AppState
+    let state: AppState
     @AppStorage("language") private var language = AppLanguage.system.rawValue
     @AppStorage("showMenuBarIcon") private var showMenuBarIcon = true
     @AppStorage("showElapsedTime") private var showElapsed = true
@@ -212,7 +218,7 @@ struct GeneralPreferencesView: View {
 
 /// Everything an AI agent or a script needs: how to drive the app and where results go.
 struct AgentPreferencesView: View {
-    @ObservedObject var state: AppState
+    let state: AppState
     @AppStorage("language") private var language = AppLanguage.system.rawValue
     @AppStorage("afterSaveCommand") private var afterSaveCommand = ""
 
@@ -275,7 +281,7 @@ struct AgentPreferencesView: View {
 // MARK: - About
 
 struct AboutPreferencesView: View {
-    @ObservedObject var state: AppState
+    let state: AppState
     @AppStorage("language") private var language = AppLanguage.system.rawValue
 
     var body: some View {
@@ -349,6 +355,7 @@ private func abbreviate(_ path: String) -> String {
 // MARK: - Window
 
 /// A single reusable preferences window with toolbar tabs (General / Agent / About).
+@MainActor
 final class PreferencesWindowController: NSWindowController {
     enum Tab: Int, CaseIterable {
         case general, agent, about

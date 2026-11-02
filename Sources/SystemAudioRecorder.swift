@@ -1,12 +1,15 @@
 import AVFoundation
 import CoreAudio
 import Foundation
+import Synchronization
 
 /// One capture lifecycle of everything the Mac plays (all processes), via a Core Audio process
 /// tap (macOS 14.2+) on a private aggregate device built on the current default output device.
 /// Requires the "System Audio Recording Only" permission (NSAudioCaptureUsageDescription).
 /// Recovery = stop() this instance and start a new one; the TrackWriter keeps the file continuous.
-final class SystemAudioRecorder {
+/// Concurrency: start/stop run on the session's control queue; `format` is set before the IO proc
+/// starts and afterwards touched only on `ioQueue`; stop() drains `ioQueue`.
+final class SystemAudioRecorder: @unchecked Sendable {
     private var tapID = AudioObjectID(kAudioObjectUnknown)
     private var aggregateID = AudioObjectID(kAudioObjectUnknown)
     private var procID: AudioDeviceIOProcID?
@@ -17,7 +20,8 @@ final class SystemAudioRecorder {
     private(set) var outputDeviceID = AudioDeviceID(kAudioObjectUnknown)
     private(set) var outputDeviceName = ""
     /// Host time of the last IO callback that delivered usable audio (0 = none yet). Read by the watchdog.
-    private(set) var lastCallbackHost: UInt64 = 0
+    private let lastCallback = Atomic<UInt64>(0)
+    var lastCallbackHost: UInt64 { lastCallback.load(ordering: .relaxed) }
 
     func start(writer: TrackWriter) throws {
         do {
@@ -80,7 +84,7 @@ final class SystemAudioRecorder {
             defer { free(list.unsafeMutablePointer) }
             guard pcm.frameLength > 0 else { return }
             // Heartbeat only on usable data: callbacks that deliver nothing count as a stall.
-            self.lastCallbackHost = mach_absolute_time()
+            self.lastCallback.store(mach_absolute_time(), ordering: .relaxed)
             writer.append(pcm, hostTime: host)
         }, "AudioDeviceCreateIOProcIDWithBlock")
         try check(AudioDeviceStart(aggregateID, procID), "AudioDeviceStart")

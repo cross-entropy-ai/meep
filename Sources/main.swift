@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var toggleItem: NSMenuItem!
@@ -10,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var quitItem: NSMenuItem!
     private var session: RecordingSession?
     private var timer: Timer?
+    private var starting = false
     private var stopping = false
     /// Processing progress 0...1 (after Stop, or finishing an unfinished recording at launch).
     private var progress: Double?
@@ -77,7 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             pendingCommand = nil
             run(command: cmd)
         } else {
-            requestMicPermissionIfNeeded { _ in }
+            Task { _ = await micPermission() }
         }
     }
 
@@ -96,36 +98,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Finishes recordings left unfinished by a crash, or by Quit / shutdown during processing.
     private func recoverUnfinishedSessions() {
-        DispatchQueue.global(qos: .utility).async {
-            let dirs = Finalizer.recoverUnfinished(root: RecordingSession.rootDirectory) { f in
-                self.setProgress(f, recovering: true)
-            }
-            DispatchQueue.main.async {
-                self.recoveringPrevious = false
-                if !self.stopping { self.progress = nil }
-                self.updateUI()
-            }
+        let root = RecordingSession.rootDirectory
+        let report = progressReporter(recovering: true)
+        Task {
+            let dirs = await Task.detached(priority: .utility) {
+                let dirs = Finalizer.recoverUnfinished(root: root, progress: report)
+                dirs.forEach(AfterSaveHook.run)
+                return dirs
+            }.value
+            recoveringPrevious = false
+            if !stopping { progress = nil }
+            updateUI()
             guard !dirs.isEmpty else { return }
-            dirs.forEach(AfterSaveHook.run)
-            DispatchQueue.main.async {
-                self.alert(tr("Finished unfinished recordings"),
-                           tr("These recordings were not finished last time (the app quit or the Mac shut down). They are processed and saved now:") + "\n\n"
-                           + dirs.map(\.lastPathComponent).joined(separator: "\n"))
-            }
+            alert(tr("Finished unfinished recordings"),
+                  tr("These recordings were not finished last time (the app quit or the Mac shut down). They are processed and saved now:") + "\n\n"
+                  + dirs.map(\.lastPathComponent).joined(separator: "\n"))
         }
     }
 
-    /// Called from processing threads; updates the menu when the whole percent changes.
-    private func setProgress(_ f: Double, recovering: Bool = false) {
-        DispatchQueue.main.async {
-            if recovering {
-                self.recoveringPrevious = true
-                if self.stopping { return }  // the current recording's progress wins
-            }
-            let old = self.progress.map { Int($0 * 100) }
-            self.progress = f
-            if old != Int(f * 100) { self.updateUI() }
+    /// A progress callback for processing threads. Hops to the main queue in order (a Task per
+    /// call could arrive out of order), then updates the menu when the whole percent changes.
+    private nonisolated func progressReporter(recovering: Bool) -> @Sendable (Double) -> Void {
+        { f in DispatchQueue.main.async { self.setProgress(f, recovering: recovering) } }
+    }
+
+    private func setProgress(_ f: Double, recovering: Bool) {
+        if recovering {
+            recoveringPrevious = true
+            if stopping { return }  // the current recording's progress wins
         }
+        let old = progress.map { Int($0 * 100) }
+        progress = f
+        if old != Int(f * 100) { updateUI() }
     }
 
     // MARK: - Recording
@@ -151,26 +155,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggle() {
-        if stopping { return }
+        if starting || stopping { return }
         if let s = session { stop(s) } else { start() }
     }
 
     private func start() {
-        requestMicPermissionIfNeeded { [self] granted in
-            if !granted {
-                self.alert(tr("No microphone access"),
-                           tr("Allow MeetingRecorder in System Settings › Privacy & Security › Microphone. This recording captures system audio only."),
-                           settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+        starting = true  // the permission prompt can take a while; ignore toggles until it is done
+        Task {
+            defer { starting = false }
+            if !(await micPermission()) {
+                alert(tr("No microphone access"),
+                      tr("Allow MeetingRecorder in System Settings › Privacy & Security › Microphone. This recording captures system audio only."),
+                      settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
             }
             do {
                 let s = try RecordingSession()
                 try s.start()
-                self.session = s
-                self.timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.updateUI() }
+                session = s
+                startTimer()
             } catch {
-                self.alert(tr("Can't start recording"), "\(error)")
+                alert(tr("Can't start recording"), "\(error)")
             }
-            self.updateUI()
+            updateUI()
+        }
+    }
+
+    /// Ticks the elapsed time in the menu bar once a second.
+    private func startTimer() {
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateUI() }  // scheduled on the main run loop
         }
     }
 
@@ -179,30 +192,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         progress = 0
         timer?.invalidate(); timer = nil
         updateUI()
-        DispatchQueue.global(qos: .userInitiated).async {
-            let warnings = s.stop { f in self.setProgress(f) }
-            AfterSaveHook.run(s.directory)
-            DispatchQueue.main.async {
-                self.session = nil
-                self.stopping = false
-                self.progress = nil
-                self.updateUI()
-                // Silence warnings can be muted; real failures (write errors, lost tracks) always show.
-                let shown = AppSettings.hideSilenceWarnings
-                    ? warnings.filter { !s.silenceWarnings.contains($0) } : warnings
-                if !shown.isEmpty {
-                    let canSuppress = shown.contains { s.silenceWarnings.contains($0) }
-                    let suppressed = self.alert(tr("Recording saved with warnings"), shown.joined(separator: "\n\n"),
-                                                settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture",
-                                                suppressible: canSuppress)
-                    if suppressed { AppSettings.hideSilenceWarnings = true }
-                }
-                if AppSettings.openFolderAfterSaving {
-                    // Select the mix (what most people want); fall back to the folder.
-                    let mixed = s.directory.appendingPathComponent("mixed.m4a")
-                    let target = FileManager.default.fileExists(atPath: mixed.path) ? mixed : s.directory
-                    NSWorkspace.shared.activateFileViewerSelecting([target])
-                }
+        let report = progressReporter(recovering: false)
+        Task {
+            let warnings = await Task.detached(priority: .userInitiated) {
+                let warnings = s.stop(progress: report)
+                AfterSaveHook.run(s.directory)
+                return warnings
+            }.value
+            session = nil
+            stopping = false
+            progress = nil
+            updateUI()
+            // Silence warnings can be muted; real failures (write errors, lost tracks) always show.
+            let shown = AppSettings.hideSilenceWarnings
+                ? warnings.filter { !s.silenceWarnings.contains($0) } : warnings
+            if !shown.isEmpty {
+                let canSuppress = shown.contains { s.silenceWarnings.contains($0) }
+                let suppressed = alert(tr("Recording saved with warnings"), shown.joined(separator: "\n\n"),
+                                       settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture",
+                                       suppressible: canSuppress)
+                if suppressed { AppSettings.hideSilenceWarnings = true }
+            }
+            if AppSettings.openFolderAfterSaving {
+                // Select the mix (what most people want); fall back to the folder.
+                let mixed = s.directory.appendingPathComponent("mixed.m4a")
+                let target = FileManager.default.fileExists(atPath: mixed.path) ? mixed : s.directory
+                NSWorkspace.shared.activateFileViewerSelecting([target])
             }
         }
     }
@@ -279,12 +294,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if icon == nil { button.title = stopping ? "⏳" : (session != nil ? "🔴 " + label : "🎙") }  // assets missing
     }
 
-    private func requestMicPermissionIfNeeded(_ done: @escaping (Bool) -> Void) {
+    /// Asks for microphone access the first time; afterwards returns the stored decision.
+    private func micPermission() async -> Bool {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
-        case .authorized: done(true)
-        case .notDetermined:
-            AVCaptureDevice.requestAccess(for: .audio) { ok in DispatchQueue.main.async { done(ok) } }
-        default: done(false)
+        case .authorized: true
+        case .notDetermined: await AVCaptureDevice.requestAccess(for: .audio)
+        default: false
         }
     }
 

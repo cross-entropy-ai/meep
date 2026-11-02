@@ -1,18 +1,22 @@
 import AVFoundation
 import CoreAudio
 import Foundation
+import Synchronization
 
 /// One capture lifecycle of the default input device with AVAudioEngine.
 /// Recovery = stop() this instance and start a new one; the TrackWriter keeps the file continuous.
-final class MicRecorder {
+/// Concurrency: start/resume/stop run on the session's control queue; the tap callback only
+/// touches the atomic heartbeat and the (Sendable) writer.
+final class MicRecorder: @unchecked Sendable {
     /// Apple voice processing (echo cancellation of speaker playback) on the mic.
     let voiceProcessing: Bool
     /// Called (on an arbitrary queue) when the engine's audio route/configuration changed.
-    var onConfigurationChange: (() -> Void)?
+    var onConfigurationChange: (@Sendable () -> Void)?
 
     private let engine = AVAudioEngine()
     private var observer: NSObjectProtocol?
-    private(set) var lastCallbackHost: UInt64 = 0
+    private let lastCallback = Atomic<UInt64>(0)
+    var lastCallbackHost: UInt64 { lastCallback.load(ordering: .relaxed) }
     private(set) var inputDeviceName = ""
     private(set) var inputDeviceID = AudioDeviceID(kAudioObjectUnknown)
     private(set) var voiceProcessingActive = false
@@ -58,7 +62,7 @@ final class MicRecorder {
         let tapFormat = voiceProcessingActive ? mono : inFmt
         input.installTap(onBus: 0, bufferSize: 4096, format: tapFormat) { [weak self] buffer, when in
             guard let self else { return }
-            self.lastCallbackHost = mach_absolute_time()
+            self.lastCallback.store(mach_absolute_time(), ordering: .relaxed)
             writer.append(buffer, hostTime: when.isHostTimeValid ? when.hostTime : mach_absolute_time())
         }
 

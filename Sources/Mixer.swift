@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// Mixes system + mic tracks into one mono file with ffmpeg: AAC 96 kbps (.m4a), or 16-bit PCM
 /// if the output ends in .wav or .caf. Inputs: anything ffmpeg can decode.
@@ -95,10 +96,11 @@ enum Mixer {
         try Subprocesses.run(p)
         defer { Subprocesses.finished(p) }
         // stderr is drained on another thread so neither pipe can fill up and block ffmpeg.
-        var errData = Data()
+        let errData = Mutex(Data())
         let errDone = DispatchSemaphore(value: 0)
         DispatchQueue.global(qos: .utility).async {
-            errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+            let data = errPipe.fileHandleForReading.readDataToEndOfFile()
+            errData.withLock { $0 = data }
             errDone.signal()
         }
         if track {
@@ -116,7 +118,7 @@ enum Mixer {
         }
         errDone.wait()
         p.waitUntilExit()
-        let text = String(data: errData, encoding: .utf8) ?? ""
+        let text = String(decoding: errData.withLock { $0 }, as: UTF8.self)
         if p.terminationStatus != 0 {
             throw CAError(what: "ffmpeg: " + text, status: p.terminationStatus)
         }
