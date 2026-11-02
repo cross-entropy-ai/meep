@@ -1,23 +1,30 @@
 name: Release
 
-# Push a tag vX.Y.Z (matching CFBundleShortVersionString) to build, sign, notarize and publish
-# a GitHub release with the zip, the Homebrew cask (meep.rb) and checksums.txt.
-# The tag message is the release: first line the title, the rest the notes. cross-entropy-ai/homebrew-tap picks up meep.rb.
-# Run manually to build and notarize without publishing (the files are kept as an artifact).
+# Builds, signs and notarizes Meep. With "publish", also creates the tag v<CFBundleShortVersionString>
+# and the GitHub release (zip, Homebrew cask meep.rb, checksums.txt) as github-actions[bot];
+# cross-entropy-ai/homebrew-tap picks up meep.rb. Without it, the files are kept as an artifact.
+#   gh workflow run release.yml -f publish=true -f notes="$(cat notes.md)"
 #
 # Secrets: DEVELOPER_ID_P12 (base64 of the "Developer ID Application" identity exported as .p12),
 #          DEVELOPER_ID_P12_PASSWORD, NOTARY_APPLE_ID, NOTARY_PASSWORD (app-specific password).
 
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Create the tag and the GitHub release
+        type: boolean
+        default: false
+      notes:
+        description: Release notes (Markdown)
+        type: string
+        default: ''
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
@@ -29,11 +36,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Check the tag matches the app version
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Version
+        id: version
+        env:
+          PUBLISH: ${{ inputs.publish }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           version=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Info.plist)
-          [ "${GITHUB_REF_NAME}" = "v$version" ] || { echo "::error::tag $GITHUB_REF_NAME, Info.plist $version"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$PUBLISH" = true ] && gh release view "v$version" >/dev/null 2>&1; then
+            echo "::error::v$version is already released; bump CFBundleShortVersionString"; exit 1
+          fi
 
       - name: Toolchain
         run: |
@@ -78,16 +91,15 @@ jobs:
           path: build/release/*
 
       - name: Publish the release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: inputs.publish
         env:
           GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ inputs.notes }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          # The annotated tag's message without its signature: the first line is the title.
-          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
-          git tag -l --format='%(contents:body)' "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
-          gh release create "$GITHUB_REF_NAME" build/release/* \
-            --title "$(git tag -l --format='%(contents:subject)' "$GITHUB_REF_NAME")" \
-            --notes-file "$RUNNER_TEMP/notes.md" --verify-tag
+          printf '%s\n' "$NOTES" > "$RUNNER_TEMP/notes.md"
+          gh release create "v$VERSION" build/release/* --target "$GITHUB_SHA" \
+            --title "Meep $VERSION" --notes-file "$RUNNER_TEMP/notes.md"
 
       - name: Remove the signing keychain
         if: always()
