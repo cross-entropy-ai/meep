@@ -4,7 +4,7 @@
 
 <h1 align="center">Meep</h1>
 
-<p align="center">A macOS menu bar app that records your meetings: everyone else (from your Mac's audio) and you (from the microphone).</p>
+<p align="center">A macOS menu bar app that records your meetings.</p>
 
 <p align="center">
   <img src="docs/preferences-general.png" width="480" alt="Preferences">
