@@ -60,7 +60,7 @@ final class AppState: ObservableObject {
                 self.applyHotKey(nil)
             default:
                 guard let s = Shortcut(event: event) else {
-                    self.hotKeyError = tr("Use at least one of ⌘, ⌥ or ⌃.", "至少要包含 ⌘、⌥ 或 ⌃。")
+                    self.hotKeyError = tr("Use at least one of ⌘, ⌥ or ⌃.")
                     return nil
                 }
                 self.applyHotKey(s)
@@ -85,7 +85,7 @@ final class AppState: ObservableObject {
             hotKey = s
             hotKeyError = nil
         } else {
-            hotKeyError = tr("\(s?.display ?? "") is already used by another app.", "\(s?.display ?? "") 已被其他 app 占用。")
+            hotKeyError = tr("%@ is already used by another app.", s?.display ?? "")
             GlobalHotKey.shared.register(AppSettings.hotKey)  // keep the previous one
         }
     }
@@ -95,7 +95,7 @@ final class AppState: ObservableObject {
     func checkForUpdate() {
         let repo = AppInfo.updateRepo
         guard !repo.isEmpty, let api = URL(string: "https://api.github.com/repos/\(repo)/releases/latest") else {
-            update = .failed(tr("No update source configured (MRUpdateGitHubRepo in Info.plist).", "未配置更新源（Info.plist 的 MRUpdateGitHubRepo）。"))
+            update = .failed(tr("No update source configured (MRUpdateGitHubRepo in Info.plist)."))
             return
         }
         update = .checking
@@ -114,7 +114,7 @@ final class AppState: ObservableObject {
                     ? .available(version: latest, url: page) : .upToDate
             } else {
                 let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-                result = .failed(code == 404 ? tr("No releases found for \(repo).", "\(repo) 还没有发布版本。") : tr("Unexpected response (HTTP \(code)).", "响应异常（HTTP \(code)）。"))
+                result = .failed(code == 404 ? tr("No releases found for %@.", repo) : tr("Unexpected response (HTTP %@).", code))
             }
             DispatchQueue.main.async { self.update = result }
         }.resume()
@@ -133,67 +133,65 @@ struct GeneralPreferencesView: View {
 
     var body: some View {
         Form {
-            Section(tr("Launch", "启动")) {
-                Toggle(tr("Start at Login", "开机启动"), isOn: Binding(
+            Section(tr("Launch")) {
+                Toggle(tr("Start at Login"), isOn: Binding(
                     get: { state.launchAtLogin },
                     set: { state.setLaunchAtLogin($0) }))
                 if let e = state.loginError {
                     Text(e).font(.caption).foregroundStyle(.red)
                 }
-                LabeledContent(tr("Hotkey", "快捷键")) {
+                LabeledContent(tr("Hotkey")) {
                     Button {
                         state.isCapturingHotKey ? state.endHotKeyCapture() : state.beginHotKeyCapture()
                     } label: {
-                        Text(state.isCapturingHotKey ? tr("Press shortcut…", "请按下快捷键…")
-                                                     : (state.hotKey?.display ?? tr("None", "无")))
+                        Text(state.isCapturingHotKey ? tr("Press shortcut…")
+                                                     : (state.hotKey?.display ?? tr("None")))
                             .frame(minWidth: 110)
                     }
-                    .help(tr("Start or stop recording from anywhere. Click, then press a new shortcut.",
-                             "在任何地方开始或停止录制。点一下，再按下新的快捷键。"))
+                    .help(tr("Start or stop recording from anywhere. Click, then press a new shortcut."))
                 }
                 if let e = state.hotKeyError {
                     Text(e).font(.caption).foregroundStyle(.red)
                 } else if state.isCapturingHotKey {
-                    Text(tr("Esc to cancel · Delete to clear", "Esc 取消 · Delete 清除"))
+                    Text(tr("Esc to cancel · Delete to clear"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
 
-            Section(tr("Appearance", "外观")) {
-                Picker(tr("Language", "语言"), selection: $language) {
+            Section(tr("Appearance")) {
+                Picker(tr("Language"), selection: $language) {
                     ForEach(AppLanguage.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) }
                 }
-                Toggle(tr("Show Menu Bar Icon", "显示菜单栏图标"), isOn: $showMenuBarIcon)
+                Toggle(tr("Show Menu Bar Icon"), isOn: $showMenuBarIcon)
                 if !showMenuBarIcon {
-                    Text(tr("The icon still appears while recording. Open the app again to show this window.",
-                            "录制中仍会显示图标。再次打开 app 可回到这个窗口。"))
+                    Text(tr("The icon still appears while recording. Open the app again to show this window."))
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Toggle(tr("Show Recording Time", "显示录制时间"), isOn: $showElapsed)
+                Toggle(tr("Show Recording Time"), isOn: $showElapsed)
             }
 
-            Section(tr("Recording", "录制")) {
+            Section(tr("Recording")) {
                 Picker(selection: $echoRaw) {
                     ForEach(EchoMode.allCases, id: \.rawValue) { Text($0.shortTitle).tag($0.rawValue) }
                 } label: {
-                    Text(tr("Echo Cancellation", "回声消除"))
+                    Text(tr("Echo Cancellation"))
                     // Rendered as a subtitle, same as Recordings Folder.
                     if state.isRecording {
-                        Text(tr("Can't change while recording.", "录制中不能切换。"))
+                        Text(tr("Can't change while recording."))
                     } else if let detail = (EchoMode(rawValue: echoRaw) ?? .webrtc).detail {
                         Text(detail)
                     }
                 }
                 .disabled(state.isRecording)
-                Toggle(tr("Open Folder After Saving", "保存后打开文件夹"), isOn: $openFolderAfterSaving)
+                Toggle(tr("Open Folder After Saving"), isOn: $openFolderAfterSaving)
                 LabeledContent {
-                    Button(tr("Show in Finder", "在 Finder 中显示")) {
+                    Button(tr("Show in Finder")) {
                         let root = RecordingSession.rootDirectory
                         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
                         NSWorkspace.shared.open(root)
                     }
                 } label: {
-                    Text(tr("Recordings Folder", "录音保存位置"))
+                    Text(tr("Recordings Folder"))
                     Text(abbreviate(RecordingSession.rootDirectory.path))  // rendered as a subtitle
                 }
             }
@@ -224,14 +222,7 @@ struct AgentPreferencesView: View {
     var body: some View {
         Form {
             Section {
-                Text(tr("""
-                    Agents and scripts can start and stop recording with the URLs below, check progress with \
-                    --status, and read the results from the recordings folder: mixed.m4a, plus the separate \
-                    tracks and session.json in raw/.
-                    """, """
-                    Agent 和脚本可以用下面的 URL 开始、停止录制，用 --status 查询进度，\
-                    再从录音文件夹读取结果：mixed.m4a，以及 raw/ 里的分轨和 session.json。
-                    """))
+                Text(tr("Agents and scripts can start and stop recording with the URLs below, check progress with --status, and read the results from the recordings folder: mixed.m4a, plus the separate tracks and session.json in raw/."))
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -242,20 +233,19 @@ struct AgentPreferencesView: View {
                 }
             }
 
-            Section(tr("Command Line", "命令行")) {
+            Section(tr("Command Line")) {
                 copyRow(helpCommand, copyText: helpCommand, wrap: true)
             }
 
             Section {
-                TextField(tr("Run After Saving", "保存后运行"), text: $afterSaveCommand,
+                TextField(tr("Run After Saving"), text: $afterSaveCommand,
                           prompt: Text(verbatim: "~/bin/transcribe"))
                     .labelsHidden()
                     .font(.system(.body, design: .monospaced))
             } header: {
-                Text(tr("Run After Saving", "保存后运行"))
+                Text(tr("Run After Saving"))
             } footer: {
-                Text(tr("A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEETINGRECORDER_DIR. Output goes to raw/after-save.log.",
-                        "每次录音保存后执行的 shell 命令。录音文件夹作为 $1 传入，也在 $MEETINGRECORDER_DIR 里。输出写入 raw/after-save.log。"))
+                Text(tr("A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEETINGRECORDER_DIR. Output goes to raw/after-save.log."))
                     .font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -277,7 +267,7 @@ struct AgentPreferencesView: View {
                 Image(systemName: state.justCopied == code ? "checkmark" : "doc.on.doc").frame(width: 16)
             }
             .buttonStyle(.borderless)
-            .help(tr("Copy: ", "复制：") + copyText)
+            .help(tr("Copy: ") + copyText)
         }
     }
 }
@@ -297,14 +287,14 @@ struct AboutPreferencesView: View {
             Text(AppInfo.name)
                 .font(.title2.weight(.semibold))
                 .padding(.top, 10)
-            Text(tr("Version", "版本") + " \(AppInfo.version) (\(AppInfo.build))")
+            Text(tr("Version") + " \(AppInfo.version) (\(AppInfo.build))")
                 .font(.callout).foregroundStyle(.secondary)
                 .textSelection(.enabled)
                 .padding(.top, 2)
 
             HStack(spacing: 24) {
-                link(tr("Privacy Policy", "隐私政策"), AppInfo.privacyPolicyURL)
-                link(tr("Terms of Use", "使用条款"), AppInfo.termsOfUseURL)
+                link(tr("Privacy Policy"), AppInfo.privacyPolicyURL)
+                link(tr("Terms of Use"), AppInfo.termsOfUseURL)
             }
             .padding(.top, 18)
 
@@ -313,7 +303,7 @@ struct AboutPreferencesView: View {
                 .padding(.top, 10)
 
             Button(action: state.checkForUpdate) {
-                Text(state.update == .checking ? tr("Checking…", "正在检查…") : tr("Check for Updates", "检查更新"))
+                Text(state.update == .checking ? tr("Checking…") : tr("Check for Updates"))
                     .frame(minWidth: 140)
             }
             .disabled(state.update == .checking)
@@ -333,11 +323,11 @@ struct AboutPreferencesView: View {
     @ViewBuilder private var updateStatus: some View {
         switch state.update {
         case .idle, .checking: Text(" ")
-        case .upToDate: Text(tr("You're up to date.", "已是最新版本。")).foregroundStyle(.secondary)
+        case .upToDate: Text(tr("You're up to date.")).foregroundStyle(.secondary)
         case .available(let v, let url):
             HStack(spacing: 4) {
-                Text(tr("Version \(v) is available.", "有新版本 \(v)。")).foregroundStyle(.secondary)
-                Link(tr("Download", "下载"), destination: url)
+                Text(tr("Version %@ is available.", v)).foregroundStyle(.secondary)
+                Link(tr("Download"), destination: url)
             }
         case .failed(let msg): Text(msg).foregroundStyle(.secondary)
         }
@@ -347,7 +337,7 @@ struct AboutPreferencesView: View {
         if let url {
             Link(title, destination: url)
         } else {
-            Text(title).foregroundStyle(.tertiary).help(tr("Not configured yet", "尚未配置"))
+            Text(title).foregroundStyle(.tertiary).help(tr("Not configured yet"))
         }
     }
 }
@@ -365,9 +355,9 @@ final class PreferencesWindowController: NSWindowController {
 
         var label: String {
             switch self {
-            case .general: return tr("General", "通用")
+            case .general: return tr("General")
             case .agent: return "Agent"
-            case .about: return tr("About", "关于")
+            case .about: return tr("About")
             }
         }
         var symbol: String {
@@ -427,8 +417,8 @@ final class PreferencesWindowController: NSWindowController {
 extension EchoMode {
     var shortTitle: String {
         switch self {
-        case .off: return tr("Off", "关闭")
-        case .apple: return tr("Apple Voice Processing", "Apple 语音处理")
+        case .off: return tr("Off")
+        case .apple: return tr("Apple Voice Processing")
         case .webrtc: return "WebRTC AEC3"
         }
     }
@@ -437,8 +427,8 @@ extension EchoMode {
     var detail: String? {
         switch self {
         case .off: return nil
-        case .apple: return tr("Real-time, but lowers other apps' volume.", "实时处理，但会压低其他 app 的音量。")
-        case .webrtc: return tr("Processed after stopping, better quality.", "停止后处理，效果更好。")
+        case .apple: return tr("Real-time, but lowers other apps' volume.")
+        case .webrtc: return tr("Processed after stopping, better quality.")
         }
     }
 }

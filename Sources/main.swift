@@ -11,6 +11,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var session: RecordingSession?
     private var timer: Timer?
     private var stopping = false
+    /// Processing progress 0...1 (after Stop, or finishing an unfinished recording at launch).
+    private var progress: Double?
+    private var recoveringPrevious = false
+    private var progressItem: NSMenuItem!
+    private let progressBar = NSProgressIndicator()
     private var launched = false
     private var pendingCommand: String?
     private let appState = AppState()
@@ -34,6 +39,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         healthItem.isEnabled = false
         healthItem.isHidden = true
         menu.addItem(healthItem)
+        progressBar.style = .bar
+        progressBar.isIndeterminate = false
+        progressBar.minValue = 0
+        progressBar.maxValue = 1
+        progressBar.controlSize = .small
+        let barView = NSView(frame: NSRect(x: 0, y: 0, width: 240, height: 18))
+        progressBar.frame = NSRect(x: 20, y: 3, width: 200, height: 12)
+        progressBar.autoresizingMask = [.width]
+        barView.addSubview(progressBar)
+        progressItem = NSMenuItem()
+        progressItem.view = barView
+        progressItem.isHidden = true
+        menu.addItem(progressItem)
         folderItem = NSMenuItem(title: "", action: #selector(openFolder), keyEquivalent: "o")
         menu.addItem(folderItem)
         menu.addItem(.separator())
@@ -76,18 +94,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         preferences.show()
     }
 
-    /// Finishes recordings left behind by a crash or force quit (raw PCM → final outputs).
+    /// Finishes recordings left unfinished by a crash, or by Quit / shutdown during processing.
     private func recoverUnfinishedSessions() {
         DispatchQueue.global(qos: .utility).async {
-            let dirs = Finalizer.recoverUnfinished(root: RecordingSession.rootDirectory)
+            let dirs = Finalizer.recoverUnfinished(root: RecordingSession.rootDirectory) { f in
+                self.setProgress(f, recovering: true)
+            }
+            DispatchQueue.main.async {
+                self.recoveringPrevious = false
+                if !self.stopping { self.progress = nil }
+                self.updateUI()
+            }
             guard !dirs.isEmpty else { return }
             dirs.forEach(AfterSaveHook.run)
             DispatchQueue.main.async {
-                self.alert(tr("Recovered unfinished recordings", "已恢复未完成的录音"),
-                           tr("The app quit unexpectedly during recording. These recordings were recovered from the capture files:",
-                              "上次录制时程序意外退出，以下录音已从临时文件恢复并处理完成：") + "\n\n"
+                self.alert(tr("Finished unfinished recordings"),
+                           tr("These recordings were not finished last time (the app quit or the Mac shut down). They are processed and saved now:") + "\n\n"
                            + dirs.map(\.lastPathComponent).joined(separator: "\n"))
             }
+        }
+    }
+
+    /// Called from processing threads; updates the menu when the whole percent changes.
+    private func setProgress(_ f: Double, recovering: Bool = false) {
+        DispatchQueue.main.async {
+            if recovering {
+                self.recoveringPrevious = true
+                if self.stopping { return }  // the current recording's progress wins
+            }
+            let old = self.progress.map { Int($0 * 100) }
+            self.progress = f
+            if old != Int(f * 100) { self.updateUI() }
         }
     }
 
@@ -121,9 +158,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func start() {
         requestMicPermissionIfNeeded { [self] granted in
             if !granted {
-                self.alert(tr("No microphone access", "没有麦克风权限"),
-                           tr("Allow MeetingRecorder in System Settings › Privacy & Security › Microphone. This recording captures system audio only.",
-                              "请到 系统设置 › 隐私与安全性 › 麦克风 中允许 MeetingRecorder。本次只录系统声音。"),
+                self.alert(tr("No microphone access"),
+                           tr("Allow MeetingRecorder in System Settings › Privacy & Security › Microphone. This recording captures system audio only."),
                            settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
             }
             do {
@@ -132,7 +168,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.session = s
                 self.timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.updateUI() }
             } catch {
-                self.alert(tr("Can't start recording", "无法开始录制"), "\(error)")
+                self.alert(tr("Can't start recording"), "\(error)")
             }
             self.updateUI()
         }
@@ -140,18 +176,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func stop(_ s: RecordingSession) {
         stopping = true
+        progress = 0
         timer?.invalidate(); timer = nil
         updateUI()
         DispatchQueue.global(qos: .userInitiated).async {
-            let warnings = s.stop()
+            let warnings = s.stop { f in self.setProgress(f) }
             AfterSaveHook.run(s.directory)
             DispatchQueue.main.async {
                 self.session = nil
                 self.stopping = false
+                self.progress = nil
                 self.updateUI()
-                if !warnings.isEmpty {
-                    self.alert(tr("Recording saved with warnings", "录制已保存，但有提示"), warnings.joined(separator: "\n\n"),
-                               settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture")
+                // Silence warnings can be muted; real failures (write errors, lost tracks) always show.
+                let shown = AppSettings.hideSilenceWarnings
+                    ? warnings.filter { !s.silenceWarnings.contains($0) } : warnings
+                if !shown.isEmpty {
+                    let canSuppress = shown.contains { s.silenceWarnings.contains($0) }
+                    let suppressed = self.alert(tr("Recording saved with warnings"), shown.joined(separator: "\n\n"),
+                                                settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture",
+                                                suppressible: canSuppress)
+                    if suppressed { AppSettings.hideSilenceWarnings = true }
                 }
                 if AppSettings.openFolderAfterSaving {
                     // Select the mix (what most people want); fall back to the folder.
@@ -165,7 +209,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateUI() {
         guard let button = statusItem?.button else { return }
-        let recording = session != nil || stopping
+        let recording = session != nil || stopping || recoveringPrevious
         if appState.isRecording != recording { appState.isRecording = recording }
         // Hidden while idle if the user turned the icon off; always shown while recording/saving.
         statusItem.isVisible = AppSettings.showMenuBarIcon || recording
@@ -177,19 +221,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             toggleItem.keyEquivalent = ""
         }
         healthItem.isHidden = true
-        folderItem.title = tr("Open Recordings Folder", "打开录音文件夹")
-        prefsItem.title = tr("Open Preferences…", "打开偏好设置…")
-        quitItem.title = tr("Quit", "退出")
+        progressItem.isHidden = true
+        let percent = progress.map { "\(Int($0 * 100))%" } ?? ""
+        folderItem.title = tr("Open Recordings Folder")
+        prefsItem.title = tr("Open Preferences…")
+        quitItem.title = tr("Quit")
         var icon = MenuBarIcons.idle
         var label = ""
         if stopping {
             icon = MenuBarIcons.saving
-            toggleItem.title = tr("Saving…", "正在保存…")
+            toggleItem.title = tr("Saving… %@", percent)
             toggleItem.isEnabled = false
-            button.toolTip = "MeetingRecorder: " + tr("saving", "正在保存")
+            label = percent
+            button.toolTip = "MeetingRecorder: " + tr("saving") + " \(percent)"
         } else if let s = session {
             let elapsed = RecordingSession.clock(Date().timeIntervalSince(s.startedAt))
-            toggleItem.title = tr("Stop Recording (\(elapsed))", "停止录制（\(elapsed)）")
+            toggleItem.title = tr("Stop Recording (%@)", elapsed)
             toggleItem.isEnabled = true
             icon = MenuBarIcons.recording
             if AppSettings.showElapsedTime { label = elapsed }
@@ -198,20 +245,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 break
             case .recovering(let t):
                 icon = MenuBarIcons.recovering
-                healthItem.title = t == .mic ? tr("Recovering microphone…", "正在恢复麦克风…")
-                                             : tr("Recovering system audio…", "正在恢复系统声音…")
+                healthItem.title = t == .mic ? tr("Recovering microphone…")
+                                             : tr("Recovering system audio…")
                 healthItem.isHidden = false
             case .lost(let t):
                 icon = MenuBarIcons.recovering
-                healthItem.title = "⚠️ " + (t == .mic ? tr("Microphone lost, retrying", "麦克风已断开，持续重试中")
-                                                     : tr("System audio lost, retrying", "系统声音已断开，持续重试中"))
+                healthItem.title = "⚠️ " + (t == .mic ? tr("Microphone lost, retrying")
+                                                     : tr("System audio lost, retrying"))
                 healthItem.isHidden = false
             }
-            button.toolTip = "MeetingRecorder: " + tr("recording", "录制中") + " \(elapsed)"
+            button.toolTip = "MeetingRecorder: " + tr("recording") + " \(elapsed)"
         } else {
-            toggleItem.title = tr("Start Recording", "开始录制")
+            toggleItem.title = tr("Start Recording")
             toggleItem.isEnabled = true
             button.toolTip = "MeetingRecorder"
+            if recoveringPrevious {
+                icon = MenuBarIcons.saving
+                label = percent
+                healthItem.title = tr("Finishing an unfinished recording… %@", percent)
+                healthItem.isHidden = false
+            }
+        }
+        if let p = progress, stopping || (session == nil && recoveringPrevious) {
+            progressBar.doubleValue = p
+            progressItem.isHidden = false
         }
         button.image = icon
         button.imagePosition = label.isEmpty ? .imageOnly : .imageLeading
@@ -238,20 +295,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func quit() {
-        if let s = session { _ = s.stop() }
         NSApp.terminate(nil)
     }
 
-    private func alert(_ title: String, _ text: String, settingsURL: String? = nil) {
+    /// Quit, logout or shutdown: close the capture files and exit right away. Processing (AEC,
+    /// mix, AAC) is not waited for; it runs on the next launch (see recoverUnfinishedSessions).
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        session?.stopCapture()
+        Subprocesses.terminateAll()
+        return .terminateNow
+    }
+
+    /// Returns true if the user ticked "Don't show again" (only offered when `suppressible`).
+    @discardableResult
+    private func alert(_ title: String, _ text: String, settingsURL: String? = nil, suppressible: Bool = false) -> Bool {
         NSApp.activate(ignoringOtherApps: true)
         let a = NSAlert()
         a.messageText = title
         a.informativeText = text
-        a.addButton(withTitle: tr("OK", "好"))
-        if settingsURL != nil { a.addButton(withTitle: tr("Open System Settings", "打开系统设置")) }
+        a.addButton(withTitle: tr("OK"))
+        if settingsURL != nil { a.addButton(withTitle: tr("Open System Settings")) }
+        if suppressible {
+            a.showsSuppressionButton = true
+            a.suppressionButton?.title = tr("Don't show again")
+        }
         if a.runModal() == .alertSecondButtonReturn, let u = settingsURL, let url = URL(string: u) {
             NSWorkspace.shared.open(url)
         }
+        return suppressible && a.suppressionButton?.state == .on
     }
 }
 

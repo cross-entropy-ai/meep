@@ -8,7 +8,8 @@ enum EchoCanceller {
     static let rate = 48000
     static let noiseSuppression: Int32 = 1  // 0=off 1=low 2=moderate 3=high 4=very high
 
-    static func process(system: URL, mic: URL, output: URL) throws {
+    static func process(system: URL, mic: URL, output: URL, progress: ((Double) -> Void)? = nil) throws {
+        let expected = max(1, Finalizer.duration(mic) * Double(rate))
         let refStream = try PCMStream(url: system)
         let micStream = try PCMStream(url: mic)
         defer { refStream.close(); micStream.close() }
@@ -50,6 +51,7 @@ enum EchoCanceller {
             for i in 0..<nMic { out[i] = Float(micChunk[i]) / 32768 }
             buf.frameLength = AVAudioFrameCount(nMic)
             try file.write(from: buf)
+            progress?(Double(total) / expected)
         }
         if total == 0 { throw CAError(what: "could not decode \(mic.lastPathComponent)", status: -1) }
     }
@@ -70,7 +72,7 @@ final class PCMStream {
                              "-ac", "1", "-ar", String(EchoCanceller.rate), "-f", "s16le", "-"]
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
-        try process.run()
+        try Subprocesses.run(process)
         handle = pipe.fileHandleForReading
     }
 
@@ -95,5 +97,6 @@ final class PCMStream {
         try? handle.close()
         if process.isRunning { process.terminate() }
         process.waitUntilExit()
+        Subprocesses.finished(process)
     }
 }

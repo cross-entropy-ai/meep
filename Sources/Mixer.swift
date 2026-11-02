@@ -16,16 +16,19 @@ enum Mixer {
     }
 
     @discardableResult
-    static func mix(system: URL?, mic: URL?, output: URL) throws -> Result {
+    static func mix(system: URL?, mic: URL?, output: URL, progress: ((Double) -> Void)? = nil) throws -> Result {
         var result = Result()
         var args = ["-y", "-hide_banner", "-loglevel", "error"]
         var chains: [String] = []
         var labels: [String] = []
         let inputs = [("system", system), ("mic", mic)].compactMap { name, u in u.map { (name, $0) } }
+        // Progress: each loudness pass ~12%, the mix (decode + filter + AAC encode) the rest.
+        let measureShare = 0.12, mixShare = 1 - measureShare * Double(inputs.count)
         for (i, (name, url)) in inputs.enumerated() {
             args += ["-i", url.path]
             var gain = 0.0
-            if let lufs = try? loudness(of: url) {
+            let base = measureShare * Double(i)
+            if let lufs = try? loudness(of: url, progress: { progress?(base + measureShare * $0) }) {
                 gain = min(max(targetLUFS - lufs, maxCutDB), maxBoostDB)
                 result.loudnessLUFS[name] = lufs
             }
@@ -37,14 +40,18 @@ enum Mixer {
             "amix=inputs=\(labels.count):duration=longest:normalize=0,alimiter=limit=0.95:level=false[out]"
         args += ["-filter_complex", filter, "-map", "[out]",
                  "-ar", "48000", "-ac", "1", "-c:a", "aac", "-b:a", "96k", output.path]
-        _ = try runFFmpeg(args)
+        let length = inputs.map { Finalizer.duration($0.1) }.max() ?? 0
+        let mixBase = 1 - mixShare
+        _ = try runFFmpeg(args, duration: length, progress: { progress?(mixBase + mixShare * $0) })
+        progress?(1)
         return result
     }
 
     /// Integrated loudness (EBU R128, LUFS) of a file, mono-folded.
-    static func loudness(of url: URL) throws -> Double {
+    static func loudness(of url: URL, progress: ((Double) -> Void)? = nil) throws -> Double {
         let err = try runFFmpeg(["-hide_banner", "-nostats", "-i", url.path,
-                                 "-af", "aformat=channel_layouts=mono,ebur128=framelog=quiet", "-f", "null", "-"])
+                                 "-af", "aformat=channel_layouts=mono,ebur128=framelog=quiet", "-f", "null", "-"],
+                                duration: progress == nil ? 0 : Finalizer.duration(url), progress: progress)
         // Summary block: "Integrated loudness:\n    I:         -14.2 LUFS"
         guard let summary = err.range(of: "Integrated loudness:"),
               let line = err[summary.upperBound...].split(separator: "\n").first(where: { $0.contains("I:") }),
@@ -57,19 +64,43 @@ enum Mixer {
         return value
     }
 
-    /// Runs ffmpeg, returns stderr; throws on non-zero exit.
-    private static func runFFmpeg(_ args: [String]) throws -> String {
+    /// Runs ffmpeg, returns stderr; throws on non-zero exit. With `progress` and the input
+    /// `duration` (s), reports 0...1 from ffmpeg's `-progress` output (out_time_us).
+    private static func runFFmpeg(_ args: [String], duration: Double = 0,
+                                  progress: ((Double) -> Void)? = nil) throws -> String {
         guard let ffmpeg = ffmpegPath() else {
             throw CAError(what: "ffmpeg not found (brew install ffmpeg)", status: -1)
         }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: ffmpeg)
-        p.arguments = args
-        let errPipe = Pipe()
+        let track = progress != nil && duration > 0
+        p.arguments = track ? ["-progress", "pipe:1"] + args : args
+        let errPipe = Pipe(), outPipe = Pipe()
         p.standardError = errPipe
-        p.standardOutput = FileHandle.nullDevice
-        try p.run()
-        let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+        p.standardOutput = track ? outPipe : FileHandle.nullDevice
+        try Subprocesses.run(p)
+        defer { Subprocesses.finished(p) }
+        // stderr is drained on another thread so neither pipe can fill up and block ffmpeg.
+        var errData = Data()
+        let errDone = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .utility).async {
+            errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+            errDone.signal()
+        }
+        if track {
+            var buffer = Data()
+            while case let chunk = outPipe.fileHandleForReading.availableData, !chunk.isEmpty {
+                buffer.append(chunk)
+                while let nl = buffer.firstIndex(of: 0x0A) {
+                    let line = String(decoding: buffer[buffer.startIndex..<nl], as: UTF8.self)
+                    buffer.removeSubrange(buffer.startIndex...nl)
+                    if line.hasPrefix("out_time_us="), let us = Double(line.dropFirst(12)) {
+                        progress?(us / 1_000_000 / duration)
+                    }
+                }
+            }
+        }
+        errDone.wait()
         p.waitUntilExit()
         let text = String(data: errData, encoding: .utf8) ?? ""
         if p.terminationStatus != 0 {

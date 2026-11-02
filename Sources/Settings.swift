@@ -46,6 +46,12 @@ enum AppSettings {
         set { d.set(newValue, forKey: "openFolderAfterSaving") }
     }
 
+    /// Skip the "track was silent the whole time" alert (set from the alert's "Don't show again").
+    static var hideSilenceWarnings: Bool {
+        get { d.bool(forKey: "hideSilenceWarnings") }
+        set { d.set(newValue, forKey: "hideSilenceWarnings") }
+    }
+
     /// Global start/stop hotkey. nil = disabled. Default ⌘⇧R.
     static var hotKey: Shortcut? {
         get {

@@ -52,6 +52,8 @@ final class RecordingSession {
     private var activity: NSObjectProtocol?
     private var stopped = false
     private(set) var warnings: [String] = []
+    /// The "track was silent the whole time" subset of `warnings`; the user can mute these.
+    private(set) var silenceWarnings: [String] = []
 
     static let micStallSeconds = 2.0
     static let systemStallSeconds = 5.0
@@ -85,8 +87,8 @@ final class RecordingSession {
 
         var errors: [String] = []
         control.sync {
-            if let e = startTrack(.system) { errors.append(tr("System audio failed to start: ", "系统声音录制失败: ") + e) }
-            if let e = startTrack(.mic) { errors.append(tr("Microphone failed to start: ", "麦克风录制失败: ") + e) }
+            if let e = startTrack(.system) { errors.append(tr("System audio failed to start: ") + e) }
+            if let e = startTrack(.mic) { errors.append(tr("Microphone failed to start: ") + e) }
         }
         if errors.count == 2 {
             control.sync { stopped = true; system?.stop(); mic?.stop() }
@@ -132,9 +134,22 @@ final class RecordingSession {
         }
     }
 
-    /// Stops capture, runs echo cancellation (webrtc mode) and the mix, writes session.json.
+    /// Stops capture, then runs echo cancellation (webrtc mode), the mix and AAC encoding.
     /// Returns warnings to show the user. Blocking; call off the main thread.
-    func stop() -> [String] {
+    func stop(progress: ((Double) -> Void)? = nil) -> [String] {
+        stopCapture()
+        return Finalizer.finalize(dir: directory, meta: finalMeta, echoMode: echoMode,
+                                  captured: captured, progress: progress)
+    }
+
+    private var finalMeta: [String: Any] = [:]
+    private var captured = (system: false, mic: false)
+
+    /// Stops capture and closes the PCM files. Fast. Leaves session.json at status "saving" with
+    /// everything processing needs, so if the app quits before processing ends (Quit, logout,
+    /// shutdown), Finalizer.recoverUnfinished() finishes it on the next launch.
+    func stopCapture() {
+        guard control.sync(execute: { !stopped }) else { return }
         let stopHost = mach_absolute_time()
         control.sync {
             stopped = true
@@ -150,20 +165,21 @@ final class RecordingSession {
         let stoppedAt = Date()
         let duration = hostTimeToSeconds(stopHost) - hostTimeToSeconds(startHost)
 
-        if let e = systemWriter.error { warnings.append(tr("System audio write error: ", "系统声音写文件出错: ") + "\(e)") }
-        if let e = micWriter.error { warnings.append(tr("Microphone write error: ", "麦克风写文件出错: ") + "\(e)") }
+        if let e = systemWriter.error { warnings.append(tr("System audio write error: ") + "\(e)") }
+        if let e = micWriter.error { warnings.append(tr("Microphone write error: ") + "\(e)") }
         let hasSys = systemWriter.buffersCaptured > 0
         let hasMic = micWriter.buffersCaptured > 0
         if hasSys && systemWriter.peak == 0 {
-            warnings.append(tr("System audio was silent the whole time. If there was sound, allow MeetingRecorder in System Settings › Privacy & Security › Screen & System Audio Recording › System Audio Recording Only.", "系统声音全程无信号。若会议中确实有声音，请到 系统设置 › 隐私与安全性 › 屏幕与系统录音 › 仅系统录音 中允许 MeetingRecorder。"))
+            silenceWarnings.append(tr("System audio was silent the whole time. If there was sound, allow MeetingRecorder in System Settings › Privacy & Security › Screen & System Audio Recording › System Audio Recording Only."))
         }
         if hasMic && micWriter.peak == 0 {
-            warnings.append(tr("The microphone was silent the whole time. Check the microphone permission or input device.", "麦克风全程无信号，请检查麦克风权限或输入设备。"))
+            silenceWarnings.append(tr("The microphone was silent the whole time. Check the microphone permission or input device."))
         }
+        warnings += silenceWarnings
         for i in interruptions where i.recoveredAt == nil {
             warnings.append(i.track == .mic
-                ? tr("Microphone stopped at \(Self.clock(i.detectedAt)) and could not be restored (\(i.reason)).", "麦克风在 \(Self.clock(i.detectedAt)) 中断后未能恢复（\(i.reason)）。")
-                : tr("System audio stopped at \(Self.clock(i.detectedAt)) and could not be restored (\(i.reason)).", "系统声音在 \(Self.clock(i.detectedAt)) 中断后未能恢复（\(i.reason)）。"))
+                ? tr("Microphone stopped at %1$@ and could not be restored (%2$@).", Self.clock(i.detectedAt), i.reason)
+                : tr("System audio stopped at %1$@ and could not be restored (%2$@).", Self.clock(i.detectedAt), i.reason))
         }
 
         let status = interruptions.contains { $0.recoveredAt == nil } ? "incomplete"
@@ -177,7 +193,11 @@ final class RecordingSession {
                     "processing": echoMode == .apple ? "Apple voice processing" : "none"],
         ]
         meta["warnings"] = warnings
-        return Finalizer.finalize(dir: directory, meta: meta, echoMode: echoMode, captured: (hasSys, hasMic))
+        meta["status"] = "saving"
+        meta["final_status"] = status  // Finalizer sets it as status when processing is done
+        Finalizer.writeMeta(meta, to: directory)
+        finalMeta = meta
+        captured = (hasSys, hasMic)
     }
 
     /// Metadata known during capture. Written at start and on every interruption change, so a
