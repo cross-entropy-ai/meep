@@ -29,6 +29,25 @@ enum AppSettings {
         set { d.set(newValue.rawValue, forKey: "echoCancellation") }
     }
 
+    /// Record the system audio track (everything the Mac plays). Default on. Off = mic only.
+    static var recordSystemAudio: Bool {
+        get { d.object(forKey: "recordSystemAudio") as? Bool ?? true }
+        set { d.set(newValue, forKey: "recordSystemAudio") }
+    }
+
+    /// UID of the input device the mic track records; empty = the system default input.
+    /// When the chosen device is not connected, the system default is recorded instead.
+    static var inputDeviceUID: String {
+        get { d.string(forKey: "inputDeviceUID") ?? "" }
+        set { d.set(newValue, forKey: "inputDeviceUID") }
+    }
+
+    /// Name of that device, to label it in Preferences while it is disconnected.
+    static var inputDeviceName: String {
+        get { d.string(forKey: "inputDeviceName") ?? "" }
+        set { d.set(newValue, forKey: "inputDeviceName") }
+    }
+
     /// Show the elapsed time next to the menu bar icon while recording (default on).
     static var showElapsedTime: Bool {
         get { d.object(forKey: "showElapsedTime") as? Bool ?? true }

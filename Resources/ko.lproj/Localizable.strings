@@ -52,7 +52,6 @@
 "Show Menu Bar Icon" = "메뉴 막대 아이콘 표시";
 "The icon still appears while recording. Open the app again to show this window." = "녹음 중에는 아이콘이 계속 표시됩니다. 앱을 다시 열면 이 창이 나타납니다.";
 "Show Recording Time" = "녹음 시간 표시";
-"Recording" = "녹음";
 "Echo Cancellation" = "에코 제거";
 "Can't change while recording." = "녹음 중에는 변경할 수 없습니다.";
 "Open Folder After Saving" = "저장 후 폴더 열기";
@@ -78,3 +77,18 @@
 "Apple Voice Processing" = "Apple 음성 처리";
 "Real-time, but lowers other apps' volume." = "실시간으로 처리하지만 다른 앱의 음량이 낮아집니다.";
 "Processed after stopping, better quality." = "중지 후 처리하며 품질이 더 좋습니다.";
+"Microphone" = "마이크";
+"System Audio" = "시스템 오디오";
+"No input device" = "입력 기기 없음";
+"Allowed" = "허용됨";
+"Not Allowed" = "허용 안 됨";
+"Allow Access" = "접근 허용";
+"Audio" = "오디오";
+"System Default" = "시스템 기본값";
+"System Default (%@)" = "시스템 기본값(%@)";
+"%@ (not connected)" = "%@(연결 안 됨)";
+"Needs system audio recording." = "시스템 오디오 녹음이 필요합니다.";
+"Access" = "접근 권한";
+"Input Device" = "입력 기기";
+"Record" = "녹음";
+"Saving" = "저장";

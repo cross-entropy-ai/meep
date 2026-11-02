@@ -52,7 +52,6 @@
 "Show Menu Bar Icon" = "Mostrar icono en la barra de menús";
 "The icon still appears while recording. Open the app again to show this window." = "El icono sigue apareciendo durante la grabación. Vuelve a abrir la app para ver esta ventana.";
 "Show Recording Time" = "Mostrar tiempo de grabación";
-"Recording" = "Grabación";
 "Echo Cancellation" = "Cancelación de eco";
 "Can't change while recording." = "No se puede cambiar durante la grabación.";
 "Open Folder After Saving" = "Abrir carpeta tras guardar";
@@ -78,3 +77,18 @@
 "Apple Voice Processing" = "Procesamiento de voz de Apple";
 "Real-time, but lowers other apps' volume." = "En tiempo real, pero baja el volumen de otras apps.";
 "Processed after stopping, better quality." = "Se procesa al detener, mejor calidad.";
+"Microphone" = "Micrófono";
+"System Audio" = "Audio del sistema";
+"No input device" = "Ningún dispositivo de entrada";
+"Allowed" = "Permitido";
+"Not Allowed" = "No permitido";
+"Allow Access" = "Permitir acceso";
+"Audio" = "Audio";
+"System Default" = "Predeterminado del sistema";
+"System Default (%@)" = "Predeterminado del sistema (%@)";
+"%@ (not connected)" = "%@ (no conectado)";
+"Needs system audio recording." = "Requiere grabar el audio del sistema.";
+"Access" = "Acceso";
+"Input Device" = "Dispositivo de entrada";
+"Record" = "Grabar";
+"Saving" = "Guardado";

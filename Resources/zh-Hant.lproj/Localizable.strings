@@ -52,7 +52,6 @@
 "Show Menu Bar Icon" = "顯示選單列圖像";
 "The icon still appears while recording. Open the app again to show this window." = "錄製中仍會顯示圖像。再次打開 app 可回到這個視窗。";
 "Show Recording Time" = "顯示錄製時間";
-"Recording" = "錄製";
 "Echo Cancellation" = "回音消除";
 "Can't change while recording." = "錄製中無法切換。";
 "Open Folder After Saving" = "儲存後打開資料夾";
@@ -78,3 +77,18 @@
 "Apple Voice Processing" = "Apple 語音處理";
 "Real-time, but lowers other apps' volume." = "即時處理，但會壓低其他 app 的音量。";
 "Processed after stopping, better quality." = "停止後處理，效果更好。";
+"Microphone" = "麥克風";
+"System Audio" = "系統聲音";
+"No input device" = "沒有輸入裝置";
+"Allowed" = "已允許";
+"Not Allowed" = "未允許";
+"Allow Access" = "允許取用";
+"Audio" = "音訊";
+"System Default" = "系統預設";
+"System Default (%@)" = "系統預設（%@）";
+"%@ (not connected)" = "%@（未連接）";
+"Needs system audio recording." = "需要錄製系統聲音。";
+"Access" = "取用權限";
+"Input Device" = "輸入裝置";
+"Record" = "錄製";
+"Saving" = "儲存";

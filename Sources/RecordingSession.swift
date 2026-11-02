@@ -12,8 +12,9 @@ import Foundation
 ///   mixed.m4a    loudness-matched mix
 ///   session.json metadata, interruptions, warnings (written at start with status "recording")
 ///
-/// Capture recovery: default-device changes, device removal, engine reconfiguration and a 1 s
-/// watchdog restart the affected track; the TrackWriter pads the gap so the file stays continuous.
+/// Capture recovery: default-device changes, device removal or return, a new input choice, engine
+/// reconfiguration and a 1 s watchdog restart the affected track; the TrackWriter pads the gap so
+/// the file stays continuous.
 ///
 /// Concurrency: capture state is confined to the `control` queue. stopCapture() lets exactly one
 /// caller through (the `stopped` flag, set on `control`); the stop results it fills in are read
@@ -36,10 +37,12 @@ final class RecordingSession: @unchecked Sendable {
     let directory: URL
     let startedAt = Date()
     let echoMode: EchoMode
+    /// Whether the system audio track is recorded (AppSettings.recordSystemAudio at start).
+    let recordSystem: Bool
     private let startHost = mach_absolute_time()
     private let control = DispatchQueue(label: "session-control")
 
-    private var systemWriter: TrackWriter!
+    private var systemWriter: TrackWriter?  // nil when system audio is off
     private var micWriter: TrackWriter!
     private var system: SystemAudioRecorder?
     private var mic: MicRecorder?
@@ -50,6 +53,10 @@ final class RecordingSession: @unchecked Sendable {
     private var nextRetry: [Track: Double] = [:]
     private var pendingRestart: Set<Track> = []
     private var systemStallHandled = false
+    /// Input device the mic track last started on.
+    private var micDeviceName: String?
+    /// Whether the mic track ran with Apple voice processing (not with a chosen non-default device).
+    private var micVoiceProcessing = false
 
     private var timer: DispatchSourceTimer?
     private var listener: HardwareListener?
@@ -66,8 +73,12 @@ final class RecordingSession: @unchecked Sendable {
     /// See AppSettings.recordingsFolder ($MEETINGRECORDER_ROOT, `recordingsFolder` default).
     static var rootDirectory: URL { AppSettings.recordingsFolder }
 
-    init(echoMode: EchoMode = AppSettings.echoMode) throws {
-        self.echoMode = echoMode
+    init(echoMode: EchoMode = AppSettings.echoMode,
+         recordSystem: Bool = AppSettings.recordSystemAudio) throws {
+        // Echo cancellation only applies with both tracks: WebRTC needs the system track as its
+        // reference, and mic-only recordings skip Apple voice processing too.
+        self.echoMode = recordSystem ? echoMode : .off
+        self.recordSystem = recordSystem
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd_HHmmss"
         directory = Self.rootDirectory.appendingPathComponent(f.string(from: startedAt), isDirectory: true)
@@ -82,17 +93,19 @@ final class RecordingSession: @unchecked Sendable {
     // MARK: - Start / stop
 
     func start() throws {
-        systemWriter = try TrackWriter(url: systemPCM, channels: 2, sessionStart: startHost)
+        if recordSystem {
+            systemWriter = try TrackWriter(url: systemPCM, channels: 2, sessionStart: startHost)
+        }
         micWriter = try TrackWriter(url: micPCM, channels: 1, sessionStart: startHost)
         activity = ProcessInfo.processInfo.beginActivity(
             options: [.userInitiated, .idleSystemSleepDisabled], reason: "Recording meeting")
 
         var errors: [String] = []
         control.sync {
-            if let e = startTrack(.system) { errors.append(tr("System audio failed to start: ") + e) }
+            if recordSystem, let e = startTrack(.system) { errors.append(tr("System audio failed to start: ") + e) }
             if let e = startTrack(.mic) { errors.append(tr("Microphone failed to start: ") + e) }
         }
-        if errors.count == 2 {
+        if errors.count == (recordSystem ? 2 : 1) {
             control.sync { stopped = true; system?.stop(); mic?.stop() }
             endActivity()
             throw CAError(what: errors.joined(separator: "\n"), status: -1)
@@ -100,7 +113,7 @@ final class RecordingSession: @unchecked Sendable {
         // A track that failed to start is retried by the watchdog like any other interruption;
         // if it never comes back, stop() reports it.
         control.sync {
-            let down: [(Track, Bool)] = [(.system, system == nil), (.mic, mic == nil)]
+            let down: [(Track, Bool)] = [(.system, recordSystem && system == nil), (.mic, mic == nil)]
             for (t, isDown) in down where isDown {
                 beginInterruption(t, reason: "start_failed")
                 interruptions[openInterruption[t]!].lastError = errors.first
@@ -161,17 +174,17 @@ final class RecordingSession: @unchecked Sendable {
             mic?.stop(); mic = nil
             writeMeta(status: "saving")  // visible to `--status` while post-processing runs
         }
-        systemWriter.finish(at: stopHost)
+        systemWriter?.finish(at: stopHost)
         micWriter.finish(at: stopHost)
         endActivity()
         let stoppedAt = Date()
         let duration = hostTimeToSeconds(stopHost) - hostTimeToSeconds(startHost)
 
-        if let e = systemWriter.error { warnings.append(tr("System audio write error: ") + "\(e)") }
+        if let e = systemWriter?.error { warnings.append(tr("System audio write error: ") + "\(e)") }
         if let e = micWriter.error { warnings.append(tr("Microphone write error: ") + "\(e)") }
-        let hasSys = systemWriter.buffersCaptured > 0
+        let hasSys = (systemWriter?.buffersCaptured ?? 0) > 0
         let hasMic = micWriter.buffersCaptured > 0
-        if hasSys && systemWriter.peak == 0 {
+        if hasSys && systemWriter?.peak == 0 {
             silenceWarnings.append(tr("System audio was silent the whole time. If there was sound, allow MeetingRecorder in System Settings › Privacy & Security › Screen & System Audio Recording › System Audio Recording Only."))
         }
         if hasMic && micWriter.peak == 0 {
@@ -190,9 +203,9 @@ final class RecordingSession: @unchecked Sendable {
         meta["stopped_at"] = ISO8601DateFormatter().string(from: stoppedAt)
         meta["duration_sec"] = duration
         meta["tracks"] = [
-            "system": ["peak": systemWriter.peak],
+            "system": recordSystem ? ["peak": systemWriter?.peak ?? 0] : ["enabled": false],
             "mic": ["peak": micWriter.peak,
-                    "processing": echoMode == .apple ? "Apple voice processing" : "none"],
+                    "processing": micVoiceProcessing ? "Apple voice processing" : "none"],
         ]
         meta["warnings"] = warnings
         meta["status"] = "saving"
@@ -211,6 +224,8 @@ final class RecordingSession: @unchecked Sendable {
             "started_at": ISO8601DateFormatter().string(from: startedAt),
             "status": status,
             "echo_cancellation": echoMode.rawValue,
+            "system_audio": recordSystem,
+            "mic_device": micDeviceName ?? NSNull(),
             "alignment": "all tracks start at session start; no offsets needed",
             "interruptions": interruptions.map { i -> [String: Any] in
                 [
@@ -237,6 +252,7 @@ final class RecordingSession: @unchecked Sendable {
         switch track {
         case .system:
             let r = SystemAudioRecorder()
+            guard let systemWriter else { return "system audio is off" }
             do { try r.start(writer: systemWriter) } catch { return "\(error)" }
             system = r
             systemStallHandled = false
@@ -258,6 +274,8 @@ final class RecordingSession: @unchecked Sendable {
             }
             do { try r.start(writer: micWriter) } catch { return "\(error)" }
             mic = r
+            micDeviceName = r.inputDeviceName
+            micVoiceProcessing = r.voiceProcessingActive
         }
         trackStartedAt[track] = now()
         return nil
@@ -273,7 +291,7 @@ final class RecordingSession: @unchecked Sendable {
 
     /// Coalesces bursts of hardware notifications into one restart.
     private func scheduleRestart(_ track: Track, reason: String) {
-        guard !stopped, !pendingRestart.contains(track) else { return }
+        guard !stopped, !pendingRestart.contains(track), track == .mic || recordSystem else { return }
         pendingRestart.insert(track)
         control.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             self?.pendingRestart.remove(track)
@@ -282,7 +300,7 @@ final class RecordingSession: @unchecked Sendable {
     }
 
     private func restart(_ track: Track, reason: String) {
-        guard !stopped else { return }
+        guard !stopped, track == .mic || recordSystem else { return }
         beginInterruption(track, reason: reason)
         let idx = openInterruption[track]!
         interruptions[idx].attempts += 1
@@ -309,9 +327,7 @@ final class RecordingSession: @unchecked Sendable {
         guard !stopped else { return }
         switch sel {
         case kAudioHardwarePropertyDefaultInputDevice:
-            if let cur = try? defaultDevice(output: false), cur != mic?.inputDeviceID {
-                scheduleRestart(.mic, reason: "default_input_changed")
-            }
+            micTargetChanged(reason: "default_input_changed")
         case kAudioHardwarePropertyDefaultSystemOutputDevice, kAudioHardwarePropertyDefaultOutputDevice:
             if let cur = try? defaultDevice(output: true), cur != system?.outputDeviceID {
                 scheduleRestart(.system, reason: "default_output_changed")
@@ -329,8 +345,24 @@ final class RecordingSession: @unchecked Sendable {
             // processing does), so act only if the device we capture from is actually gone.
             if let m = mic, !deviceIsAlive(m.inputDeviceID) {
                 scheduleRestart(.mic, reason: "input_device_removed")
+            } else {
+                micTargetChanged(reason: "input_device_connected")  // the chosen device is back
             }
         default: break
+        }
+    }
+
+    /// Restarts the mic if it should now record from a different device.
+    private func micTargetChanged(reason: String) {
+        guard let m = mic, let want = preferredInputDevice(), want != m.inputDeviceID else { return }
+        scheduleRestart(.mic, reason: reason)
+    }
+
+    /// The input device setting changed: switch the mic track over now.
+    func inputDeviceSettingChanged() {
+        control.async { [self] in
+            guard !stopped else { return }
+            micTargetChanged(reason: "input_device_selected")
         }
     }
 

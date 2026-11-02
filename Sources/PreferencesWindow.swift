@@ -1,4 +1,5 @@
 import AppKit
+import CoreAudio
 import Observation
 import SwiftUI
 
@@ -26,6 +27,71 @@ final class AppState {
 
     /// Called when a setting that affects the menu bar changes.
     @ObservationIgnored var onChange: () -> Void = {}
+
+    // MARK: Audio sources
+
+    /// Name of the system default input device; nil = none.
+    var defaultInputName: String?
+    /// Connected input devices, for the microphone picker.
+    var inputDevices: [InputDevice] = []
+    /// AppSettings.inputDeviceUID; "" = system default.
+    var inputDeviceUID = AppSettings.inputDeviceUID
+    /// Tells a running recording to switch devices.
+    @ObservationIgnored var onInputDeviceChange: () -> Void = {}
+    var micPermission = Permissions.microphone
+    var systemAudioPermission = Permissions.systemAudio
+    @ObservationIgnored private var deviceListener: HardwareListener?
+    @ObservationIgnored private var activeObserver: Any?
+
+    func refreshSources() {
+        defaultInputName = (try? defaultDevice(output: false)).flatMap { try? readStringProperty($0, kAudioObjectPropertyName) }
+        inputDevices = listInputDevices()
+        micPermission = Permissions.microphone
+        systemAudioPermission = Permissions.systemAudio
+    }
+
+    /// Keeps the sources current: default input changes, and permissions changed in System
+    /// Settings (re-read when the app becomes active again).
+    func watchSources() {
+        refreshSources()
+        guard deviceListener == nil else { return }
+        deviceListener = HardwareListener(queue: .main, selectors: [
+            kAudioHardwarePropertyDefaultInputDevice, kAudioHardwarePropertyDevices,
+        ]) { [weak self] _ in MainActor.assumeIsolated { self?.refreshSources() } }
+        activeObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in MainActor.assumeIsolated { self?.refreshSources() } }
+    }
+
+    func selectInputDevice(_ uid: String) {
+        inputDeviceUID = uid
+        AppSettings.inputDeviceUID = uid
+        if let d = inputDevices.first(where: { $0.uid == uid }) { AppSettings.inputDeviceName = d.name }
+        onInputDeviceChange()
+    }
+
+    /// Asks once; after a decision only System Settings can change it.
+    func requestMicrophone() {
+        guard micPermission == .notDetermined else {
+            NSWorkspace.shared.open(Permissions.microphoneSettingsURL)
+            return
+        }
+        Task {
+            _ = await Permissions.requestMicrophone()
+            refreshSources()
+        }
+    }
+
+    func requestSystemAudio() {
+        guard systemAudioPermission == .notDetermined else {
+            NSWorkspace.shared.open(Permissions.systemAudioSettingsURL)
+            return
+        }
+        Task {
+            _ = await Permissions.requestSystemAudio()
+            refreshSources()
+        }
+    }
 
     func setLaunchAtLogin(_ on: Bool) {
         do {
@@ -134,7 +200,6 @@ struct GeneralPreferencesView: View {
     @AppStorage("language") private var language = AppLanguage.system.rawValue
     @AppStorage("showMenuBarIcon") private var showMenuBarIcon = true
     @AppStorage("showElapsedTime") private var showElapsed = true
-    @AppStorage("echoCancellation") private var echoRaw = EchoMode.webrtc.rawValue
     @AppStorage("openFolderAfterSaving") private var openFolderAfterSaving = true
 
     var body: some View {
@@ -176,19 +241,7 @@ struct GeneralPreferencesView: View {
                 Toggle(tr("Show Recording Time"), isOn: $showElapsed)
             }
 
-            Section(tr("Recording")) {
-                Picker(selection: $echoRaw) {
-                    ForEach(EchoMode.allCases, id: \.rawValue) { Text($0.shortTitle).tag($0.rawValue) }
-                } label: {
-                    Text(tr("Echo Cancellation"))
-                    // Rendered as a subtitle, same as Recordings Folder.
-                    if state.isRecording {
-                        Text(tr("Can't change while recording."))
-                    } else if let detail = (EchoMode(rawValue: echoRaw) ?? .webrtc).detail {
-                        Text(detail)
-                    }
-                }
-                .disabled(state.isRecording)
+            Section(tr("Saving")) {
                 Toggle(tr("Open Folder After Saving"), isOn: $openFolderAfterSaving)
                 LabeledContent {
                     Button(tr("Show in Finder")) {
@@ -210,7 +263,87 @@ struct GeneralPreferencesView: View {
         .onChange(of: language) { _, _ in state.onChange() }
         .onChange(of: showMenuBarIcon) { _, _ in state.onChange() }
         .onChange(of: showElapsed) { _, _ in state.onChange() }
+    }
+}
+
+// MARK: - Audio
+
+/// Per source (microphone, system audio): access, and what is recorded and how.
+struct AudioPreferencesView: View {
+    let state: AppState
+    @AppStorage("language") private var language = AppLanguage.system.rawValue
+    @AppStorage("echoCancellation") private var echoRaw = EchoMode.webrtc.rawValue
+    @AppStorage("recordSystemAudio") private var recordSystemAudio = true
+
+    var body: some View {
+        Form {
+            Section(tr("Microphone")) {
+                permissionRow(tr("Access"), status: state.micPermission, request: state.requestMicrophone)
+                Picker(tr("Input Device"), selection: Binding(
+                    get: { state.inputDeviceUID }, set: { state.selectInputDevice($0) })) {
+                    Text(state.defaultInputName.map { tr("System Default (%@)", $0) } ?? tr("System Default"))
+                        .tag("")
+                    Divider()
+                    ForEach(state.inputDevices, id: \.uid) { Text($0.name).tag($0.uid) }
+                    if !state.inputDeviceUID.isEmpty,
+                       !state.inputDevices.contains(where: { $0.uid == state.inputDeviceUID }) {
+                        Text(tr("%@ (not connected)", AppSettings.inputDeviceName.isEmpty
+                                ? state.inputDeviceUID : AppSettings.inputDeviceName))
+                            .tag(state.inputDeviceUID)
+                    }
+                }
+            }
+
+            Section(tr("System Audio")) {
+                permissionRow(tr("Access"), status: state.systemAudioPermission, request: state.requestSystemAudio)
+                Toggle(isOn: $recordSystemAudio) {
+                    Text(tr("Record"))
+                    if state.isRecording { Text(tr("Can't change while recording.")) }  // rendered as a subtitle
+                }
+                .disabled(state.isRecording)
+                Picker(selection: $echoRaw) {
+                    ForEach(EchoMode.allCases, id: \.rawValue) { Text($0.shortTitle).tag($0.rawValue) }
+                } label: {
+                    Text(tr("Echo Cancellation"))
+                    // Rendered as a subtitle, same as Recordings Folder.
+                    if state.isRecording {
+                        Text(tr("Can't change while recording."))
+                    } else if !recordSystemAudio {
+                        Text(tr("Needs system audio recording."))
+                    } else if let detail = (EchoMode(rawValue: echoRaw) ?? .webrtc).detail {
+                        Text(detail)
+                    }
+                }
+                .disabled(state.isRecording || !recordSystemAudio)
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 500)
+        .fixedSize()
+        .onAppear { state.watchSources() }
         .onChange(of: echoRaw) { _, _ in state.onChange() }
+    }
+
+    private func permissionRow(_ title: String, status: PermissionStatus,
+                               request: @escaping () -> Void) -> some View {
+        LabeledContent(title) {
+            switch status {
+            case .authorized:
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    Text(tr("Allowed")).foregroundStyle(.secondary)
+                }
+            case .notDetermined:
+                Button(tr("Allow Access"), action: request)
+            case .denied:
+                HStack(spacing: 8) {
+                    Text(tr("Not Allowed")).foregroundStyle(.red)
+                    Button(tr("Open System Settings"), action: request)
+                }
+            case .unknown:
+                Button(tr("Open System Settings"), action: request)
+            }
+        }
     }
 }
 
@@ -354,15 +487,16 @@ private func abbreviate(_ path: String) -> String {
 
 // MARK: - Window
 
-/// A single reusable preferences window with toolbar tabs (General / Agent / About).
+/// A single reusable preferences window with toolbar tabs (General / Audio / Agent / About).
 @MainActor
 final class PreferencesWindowController: NSWindowController {
     enum Tab: Int, CaseIterable {
-        case general, agent, about
+        case general, audio, agent, about
 
         var label: String {
             switch self {
             case .general: return tr("General")
+            case .audio: return tr("Audio")
             case .agent: return "Agent"
             case .about: return tr("About")
             }
@@ -370,6 +504,7 @@ final class PreferencesWindowController: NSWindowController {
         var symbol: String {
             switch self {
             case .general: return "gearshape"
+            case .audio: return "waveform"
             case .agent: return "terminal"
             case .about: return "info.circle"
             }
@@ -389,6 +524,7 @@ final class PreferencesWindowController: NSWindowController {
             return item
         }
         tabs.addTabViewItem(host(GeneralPreferencesView(state: state), .general))
+        tabs.addTabViewItem(host(AudioPreferencesView(state: state), .audio))
         tabs.addTabViewItem(host(AgentPreferencesView(state: state), .agent))
         tabs.addTabViewItem(host(AboutPreferencesView(state: state), .about))
 

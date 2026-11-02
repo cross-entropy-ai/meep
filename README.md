@@ -45,7 +45,7 @@ Recordings are saved to `~/Documents/MeetingRecordings/<date_time>/`:
 | `mixed.m4a` | The meeting, both sides. Usually all you need. |
 | `raw/` | Separate tracks for you and the other side, and a `session.json` with details. |
 
-Preferences (⌘,) let you change the hotkey, language, echo cancellation and more.
+Preferences (⌘,) let you change the hotkey, language and more. The Audio tab shows whether microphone and system audio access are granted, picks the microphone (the system default, or a specific input device), and can turn system audio off to record only the microphone.
 
 ## Automation
 

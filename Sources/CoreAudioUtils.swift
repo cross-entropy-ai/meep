@@ -83,3 +83,57 @@ func hostTimeToSeconds(_ t: UInt64) -> Double {
     mach_timebase_info(&info)
     return Double(t) * Double(info.numer) / Double(info.denom) / 1e9
 }
+
+// MARK: - Input devices
+
+struct InputDevice: Equatable, Sendable {
+    let id: AudioDeviceID
+    let uid: String
+    let name: String
+}
+
+/// Devices with at least one input channel, excluding private devices (this process's capture
+/// aggregate, voice processing's helper devices).
+func listInputDevices() -> [InputDevice] {
+    var addr = propAddress(kAudioHardwarePropertyDevices)
+    var size: UInt32 = 0
+    let sys = AudioObjectID(kAudioObjectSystemObject)
+    guard AudioObjectGetPropertyDataSize(sys, &addr, 0, nil, &size) == noErr, size > 0 else { return [] }
+    var ids = [AudioDeviceID](repeating: 0, count: Int(size) / MemoryLayout<AudioDeviceID>.size)
+    guard AudioObjectGetPropertyData(sys, &addr, 0, nil, &size, &ids) == noErr else { return [] }
+    return ids.compactMap { id in
+        guard inputChannelCount(id) > 0, !isPrivateAggregate(id),
+              let uid = try? readStringProperty(id, kAudioDevicePropertyDeviceUID),
+              let name = try? readStringProperty(id, kAudioObjectPropertyName) else { return nil }
+        return InputDevice(id: id, uid: uid, name: name)
+    }
+}
+
+private func inputChannelCount(_ dev: AudioDeviceID) -> Int {
+    var addr = propAddress(kAudioDevicePropertyStreamConfiguration, scope: kAudioObjectPropertyScopeInput)
+    var size: UInt32 = 0
+    guard AudioObjectGetPropertyDataSize(dev, &addr, 0, nil, &size) == noErr, size > 0 else { return 0 }
+    let raw = UnsafeMutableRawPointer.allocate(byteCount: Int(size), alignment: MemoryLayout<AudioBufferList>.alignment)
+    defer { raw.deallocate() }
+    guard AudioObjectGetPropertyData(dev, &addr, 0, nil, &size, raw) == noErr else { return 0 }
+    let list = UnsafeMutableAudioBufferListPointer(raw.assumingMemoryBound(to: AudioBufferList.self))
+    return list.reduce(0) { $0 + Int($1.mNumberChannels) }
+}
+
+private func isPrivateAggregate(_ dev: AudioDeviceID) -> Bool {
+    var addr = propAddress(kAudioAggregateDevicePropertyComposition)
+    guard AudioObjectHasProperty(dev, &addr) else { return false }
+    var size = UInt32(MemoryLayout<CFDictionary>.size)
+    var cf: Unmanaged<CFDictionary>?
+    guard AudioObjectGetPropertyData(dev, &addr, 0, nil, &size, &cf) == noErr,
+          let dict = cf?.takeRetainedValue() as? [String: Any] else { return false }
+    return (dict[kAudioAggregateDeviceIsPrivateKey] as? Int ?? 0) != 0
+}
+
+/// The device the mic track should record: the chosen input (AppSettings.inputDeviceUID) while
+/// it is connected, otherwise the system default input.
+func preferredInputDevice() -> AudioDeviceID? {
+    let uid = AppSettings.inputDeviceUID
+    if !uid.isEmpty, let d = listInputDevices().first(where: { $0.uid == uid }), deviceIsAlive(d.id) { return d.id }
+    return try? defaultDevice(output: false)
+}

@@ -52,7 +52,6 @@
 "Show Menu Bar Icon" = "メニューバーにアイコンを表示";
 "The icon still appears while recording. Open the app again to show this window." = "録音中はアイコンが表示されます。アプリをもう一度開くとこのウインドウが表示されます。";
 "Show Recording Time" = "録音時間を表示";
-"Recording" = "録音";
 "Echo Cancellation" = "エコーキャンセル";
 "Can't change while recording." = "録音中は変更できません。";
 "Open Folder After Saving" = "保存後にフォルダを開く";
@@ -78,3 +77,18 @@
 "Apple Voice Processing" = "Apple 音声処理";
 "Real-time, but lowers other apps' volume." = "リアルタイムで処理しますが、他のアプリの音量が下がります。";
 "Processed after stopping, better quality." = "停止後に処理し、品質が高くなります。";
+"Microphone" = "マイク";
+"System Audio" = "システムオーディオ";
+"No input device" = "入力デバイスがありません";
+"Allowed" = "許可済み";
+"Not Allowed" = "未許可";
+"Allow Access" = "アクセスを許可";
+"Audio" = "オーディオ";
+"System Default" = "システムのデフォルト";
+"System Default (%@)" = "システムのデフォルト（%@）";
+"%@ (not connected)" = "%@（未接続）";
+"Needs system audio recording." = "システムオーディオの録音が必要です。";
+"Access" = "アクセス";
+"Input Device" = "入力デバイス";
+"Record" = "録音";
+"Saving" = "保存";

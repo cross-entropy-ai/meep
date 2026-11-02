@@ -63,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quitItem = NSMenuItem(title: "", action: #selector(quit), keyEquivalent: "q")
         menu.addItem(quitItem)
         statusItem.menu = menu
+        appState.onInputDeviceChange = { [weak self] in self?.session?.inputDeviceSettingChanged() }
         appState.onChange = { [weak self] in
             self?.updateUI()
             self?.preferences.relabel()  // tab names follow the language setting
@@ -148,6 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "stop": if session != nil { toggle() }
         case "preferences": preferences.show()
         case "preferences/general": preferences.show(tab: .general)
+        case "preferences/audio": preferences.show(tab: .audio)
         case "preferences/agent": preferences.show(tab: .agent)
         case "preferences/about": preferences.show(tab: .about)
         default: break
