@@ -16,7 +16,7 @@ git -C "$SRC" checkout -q "$REF"
 
 cd "$SRC"
 # Match the app's minimum macOS (Info.plist LSMinimumSystemVersion / build.sh -target).
-export MACOSX_DEPLOYMENT_TARGET=14.2
+export MACOSX_DEPLOYMENT_TARGET=15.0
 [ -d build ] || meson setup build --default-library=static --buildtype=release \
   --force-fallback-for=abseil-cpp --prefix="$ROOT/build/webrtc-prefix"
 ninja -C build

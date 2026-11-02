@@ -20,7 +20,7 @@
 
 ## Install
 
-Requires macOS 14.2+ on Apple Silicon and the Xcode Command Line Tools.
+Requires macOS 15+ on Apple Silicon and the Xcode Command Line Tools.
 
 ```bash
 brew install ffmpeg meson ninja

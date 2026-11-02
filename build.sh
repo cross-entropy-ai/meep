@@ -23,11 +23,11 @@ done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 
 mkdir -p build/obj
-clang++ -O2 -std=c++17 -target arm64-apple-macos14.2 -DWEBRTC_POSIX -DWEBRTC_MAC -DWEBRTC_LIBRARY_IMPL \
+clang++ -O2 -std=c++17 -target arm64-apple-macos15.0 -DWEBRTC_POSIX -DWEBRTC_MAC -DWEBRTC_LIBRARY_IMPL \
   -I "$WEBRTC/include" -c Native/webrtc_aec.cpp -o build/obj/webrtc_aec.o
 
 swiftc -O -swift-version 5 \
-  -target arm64-apple-macos14.2 \
+  -target arm64-apple-macos15.0 \
   -framework AppKit -framework AVFoundation -framework CoreAudio -framework ServiceManagement -framework SwiftUI \
   -import-objc-header Native/webrtc_aec.h build/obj/webrtc_aec.o "$WEBRTC/lib/libwebrtc_apm.a" -lc++ \
   Sources/*.swift -o "$APP/Contents/MacOS/MeetingRecorder"
