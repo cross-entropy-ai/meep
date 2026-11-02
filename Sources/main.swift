@@ -354,8 +354,8 @@ if cli.count >= 3 && cli[1] == "--remix" {
     runCLI {
         let dir = URL(fileURLWithPath: cli[2], isDirectory: true)
         let raw = Finalizer.rawDir(dir)
-        let aec = raw.appendingPathComponent("mic_aec.caf")
-        let mic = FileManager.default.fileExists(atPath: aec.path) ? aec : raw.appendingPathComponent("mic.caf")
+        let mic = ["mic_aec.pcm.caf", "mic_aec.caf", "mic.caf"].map { raw.appendingPathComponent($0) }
+            .first { FileManager.default.fileExists(atPath: $0.path) } ?? raw.appendingPathComponent("mic.caf")
         let r = try Mixer.mix(system: raw.appendingPathComponent("system.caf"), mic: mic,
                               output: dir.appendingPathComponent("mixed.m4a"))
         print("wrote \(dir.appendingPathComponent("mixed.m4a").path)  loudness LUFS: \(r.loudnessLUFS)  gain dB: \(r.gainsDB)")
@@ -365,10 +365,20 @@ if cli.count >= 3 && cli[1] == "--aec" {
     runCLI {
         let dir = URL(fileURLWithPath: cli[2], isDirectory: true)
         let raw = Finalizer.rawDir(dir)
-        let out = cli.count >= 4 ? URL(fileURLWithPath: cli[3]) : raw.appendingPathComponent("mic_aec.caf")
-        try EchoCanceller.process(system: raw.appendingPathComponent("system.caf"),
-                                  mic: raw.appendingPathComponent("mic.caf"), output: out)
-        print("wrote \(out.path)")
+        if cli.count >= 4 {
+            let out = URL(fileURLWithPath: cli[3])
+            try EchoCanceller.process(system: raw.appendingPathComponent("system.caf"),
+                                      mic: raw.appendingPathComponent("mic.caf"), output: out)
+            print("wrote \(out.path)")
+        } else {
+            // Default: the recording's own layout, lossless PCM first, then AAC raw/mic_aec.caf.
+            let pcm = raw.appendingPathComponent(Finalizer.micAECPCM), out = raw.appendingPathComponent("mic_aec.caf")
+            try EchoCanceller.process(system: raw.appendingPathComponent("system.caf"),
+                                      mic: raw.appendingPathComponent("mic.caf"), output: pcm)
+            try Finalizer.encodeAAC(pcm, to: out, bitRate: 64_000, progress: { _ in })
+            try? FileManager.default.removeItem(at: pcm)
+            print("wrote \(out.path)")
+        }
     }
 }
 if cli.count >= 2 && cli[1].hasPrefix("--") {
