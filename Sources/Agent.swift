@@ -1,7 +1,7 @@
 import Foundation
 
 /// Runs the user's "Run After Saving" command once a recording is finished.
-/// The command gets the recording folder as $1 and in $MEETINGRECORDER_DIR; it runs via `zsh -lc`
+/// The command gets the recording folder as $1 and in $MEEP_DIR; it runs via `zsh -lc`
 /// (reads ~/.zshenv and ~/.zprofile, not ~/.zshrc). Output goes to raw/after-save.log.
 /// Its state is recorded in session.json "after_save": {"command", "status": "running|done|failed",
 /// "started_at", "log", "pid"}, plus "exit_status" and "finished_at" once it ends, or "error" if it
@@ -21,9 +21,9 @@ enum AfterSaveHook {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/zsh")
         // `cmd "$1"`: the command line as typed, with the folder as its first argument.
-        p.arguments = ["-lc", "\(cmd) \"$1\"", "meetingrecorder-after-save", dir.path]
+        p.arguments = ["-lc", "\(cmd) \"$1\"", "meep-after-save", dir.path]
         var env = ProcessInfo.processInfo.environment
-        env["MEETINGRECORDER_DIR"] = dir.path
+        env["MEEP_DIR"] = dir.path
         p.environment = env
         p.currentDirectoryURL = dir
         p.standardInput = FileHandle.nullDevice  // not the app's or a terminal's stdin
@@ -74,7 +74,7 @@ enum AfterSaveHook {
     }
 }
 
-/// `MeetingRecorder status`: machine-readable state for agents, derived from the recordings
+/// `Meep status`: machine-readable state for agents, derived from the recordings
 /// on disk (no connection to the running app needed). `start/stop --wait` poll the same state.
 enum StatusReport {
     /// {"state": "idle|recording|saving", "current": {state, dir, started_at} | null,
@@ -122,11 +122,11 @@ enum StatusReport {
 }
 
 /// Why the last start failed, for `start --wait` (a failed start leaves no recording folder).
-/// ~/Library/Application Support/MeetingRecorder/last-start.json: {"at": ISO 8601, "error": text}.
+/// ~/Library/Application Support/Meep/last-start.json: {"at": ISO 8601, "error": text}.
 enum StartFailure {
     static var url: URL {
         FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/MeetingRecorder/last-start.json")
+            .appendingPathComponent("Library/Application Support/Meep/last-start.json")
     }
 
     private static var formatter: ISO8601DateFormatter {
@@ -154,9 +154,9 @@ enum StartFailure {
 
 enum HelpText {
     static var text: String {
-        let exe = "MeetingRecorder"
+        let exe = "meep"
         return """
-        MeetingRecorder — records system audio + microphone for meetings.
+        Meep — records system audio + microphone for meetings.
         CLI: \(Bundle.main.executableURL?.path ?? exe) <command> (`cmd` and `--cmd` are the same)
 
         CONTROL (the app must be installed; these launch it if needed)
@@ -173,8 +173,8 @@ enum HelpText {
                      "latest": {"dir", "mixed", "status", "after_save", ...}, "recordings_folder"}
               status of a recording: recording | saving | complete | recovered | incomplete
                 (a track was lost or recorded nothing) | recovered_after_crash
-          URL scheme: open "meetingrecorder://start" (also stop, preferences); returns at once.
-              Add ?quiet (meetingrecorder://start?quiet) for no alerts or Finder window.
+          URL scheme: open "meep://start" (also stop, preferences); returns at once.
+              Add ?quiet (meep://start?quiet) for no alerts or Finder window.
 
         PROCESSING (inputs: .caf .wav .m4a .aac .mp3 .flac .ogg; output format follows the extension)
           \(exe) aec --system <file> --mic <file> -o <out.caf|.wav>
@@ -210,18 +210,18 @@ enum HelpText {
                              noise suppression, auto level (what ran: mic_processing in session.json)
           raw/session.json   status, timing, interruptions, warnings, after_save
           All tracks start at the same moment: sample N of every file is the same instant.
-          Folder: $MEETINGRECORDER_ROOT, else Preferences › General › Recordings Folder, i.e.
-            defaults write com.junyi.MeetingRecorder recordingsFolder -string <path>
+          Folder: $MEEP_ROOT, else Preferences › General › Recordings Folder, i.e.
+            defaults write com.junyi.Meep recordingsFolder -string <path>
           (the app reads the defaults key; the environment variable only affects this process:
           start/stop refuse to run (exit 2) when it differs from the app's folder).
 
         AFTER SAVING
           Preferences › Agent › Run After Saving: a shell command run after each recording is saved,
-          with the recording folder as $1 and $MEETINGRECORDER_DIR. Output: raw/after-save.log.
+          with the recording folder as $1 and $MEEP_DIR. Output: raw/after-save.log.
           session.json "after_save": {"status": "running|done|failed", "exit_status", ...}.
           Runs via zsh -lc: ~/.zprofile is read, ~/.zshrc is not (set PATH there or use full paths).
 
-        SETTINGS (defaults write com.junyi.MeetingRecorder <key> <value>; Preferences sets the same)
+        SETTINGS (defaults write com.junyi.Meep <key> <value>; Preferences sets the same)
           inputDeviceUID -string <uid>|""     microphone; "" = system default
           recordSystemAudio -bool true|false   record what the Mac plays
           echoCancellation -string webrtc|apple|off

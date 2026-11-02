@@ -1,4 +1,4 @@
-/* MeetingRecorder UI strings. Key = English source text. */
+/* Meep UI strings. Key = English source text. */
 
 "Follow System" = "시스템 설정 따르기";
 "Mixing failed (the tracks are kept): " = "믹스 실패(개별 트랙은 보존됨): ";
@@ -7,7 +7,7 @@
 "Finished unfinished recordings" = "완료되지 않은 녹음을 처리했습니다";
 "These recordings were not finished last time (the app quit or the Mac shut down). They are processed and saved now:" = "다음 녹음은 지난번에 처리가 완료되지 않았습니다(앱 종료 또는 Mac 종료). 지금 처리하여 저장했습니다:";
 "No microphone access" = "마이크 접근 권한 없음";
-"Allow MeetingRecorder in System Settings › Privacy & Security › Microphone. This recording captures system audio only." = "시스템 설정 › 개인정보 보호 및 보안 › 마이크에서 MeetingRecorder를 허용하세요. 이번 녹음은 시스템 오디오만 녹음합니다.";
+"Allow Meep in System Settings › Privacy & Security › Microphone. This recording captures system audio only." = "시스템 설정 › 개인정보 보호 및 보안 › 마이크에서 Meep를 허용하세요. 이번 녹음은 시스템 오디오만 녹음합니다.";
 "Can't start recording" = "녹음을 시작할 수 없음";
 "Recording saved with warnings" = "녹음이 저장되었지만 경고가 있습니다";
 "Open Recordings Folder" = "녹음 폴더 열기";
@@ -30,7 +30,7 @@
 "Microphone failed to start: " = "마이크 녹음 시작 실패: ";
 "System audio write error: " = "시스템 오디오 쓰기 오류: ";
 "Microphone write error: " = "마이크 쓰기 오류: ";
-"System audio was silent the whole time. If there was sound, allow MeetingRecorder in System Settings › Privacy & Security › Screen & System Audio Recording › System Audio Recording Only." = "시스템 오디오가 처음부터 끝까지 무음이었습니다. 소리가 있었다면 시스템 설정 › 개인정보 보호 및 보안 › 화면 및 시스템 오디오 녹음 › 시스템 오디오 녹음 전용에서 MeetingRecorder를 허용하세요.";
+"System audio was silent the whole time. If there was sound, allow Meep in System Settings › Privacy & Security › Screen & System Audio Recording › System Audio Recording Only." = "시스템 오디오가 처음부터 끝까지 무음이었습니다. 소리가 있었다면 시스템 설정 › 개인정보 보호 및 보안 › 화면 및 시스템 오디오 녹음 › 시스템 오디오 녹음 전용에서 Meep를 허용하세요.";
 "The microphone was silent the whole time. Check the microphone permission or input device." = "마이크가 처음부터 끝까지 무음이었습니다. 마이크 권한이나 입력 기기를 확인하세요.";
 "Microphone stopped at %1$@ and could not be restored (%2$@)." = "마이크가 %1$@에 중단된 후 복구되지 않았습니다(%2$@).";
 "System audio stopped at %1$@ and could not be restored (%2$@)." = "시스템 오디오가 %1$@에 중단된 후 복구되지 않았습니다(%2$@).";
@@ -59,7 +59,7 @@
 "Agents and scripts can start and stop recording with the URLs below, check progress with the status command, and read the results from the recordings folder: mixed.m4a, plus the separate tracks and session.json in raw/." = "에이전트와 스크립트는 아래 URL로 녹음을 시작·중지하고, status로 진행 상황을 확인하고, 녹음 폴더에서 결과를 읽을 수 있습니다: mixed.m4a, 그리고 raw/ 안의 개별 트랙과 session.json.";
 "Command Line" = "명령줄";
 "Run After Saving" = "저장 후 실행";
-"A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEETINGRECORDER_DIR. Output goes to raw/after-save.log." = "녹음이 저장될 때마다 실행되는 셸 명령입니다. 녹음 폴더가 $1과 $MEETINGRECORDER_DIR로 전달됩니다. 출력은 raw/after-save.log에 기록됩니다.";
+"A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEEP_DIR. Output goes to raw/after-save.log." = "녹음이 저장될 때마다 실행되는 셸 명령입니다. 녹음 폴더가 $1과 $MEEP_DIR로 전달됩니다. 출력은 raw/after-save.log에 기록됩니다.";
 "Copy: " = "복사: ";
 "Version" = "버전";
 "Privacy Policy" = "개인정보 처리방침";
@@ -109,7 +109,7 @@
 "Choose" = "선택";
 "Choose where to save recordings." = "녹음을 저장할 위치를 선택하세요.";
 "Can't save to %@: no write permission." = "%@에 저장할 수 없습니다: 쓰기 권한이 없습니다.";
-"Set by MEETINGRECORDER_ROOT." = "MEETINGRECORDER_ROOT로 지정되어 있습니다.";
+"Set by MEEP_ROOT." = "MEEP_ROOT로 지정되어 있습니다.";
 "The microphone recorded nothing. Check the input device." = "마이크에 아무것도 녹음되지 않았습니다. 입력 기기를 확인하세요.";
 "System audio recorded nothing." = "시스템 오디오에 아무것도 녹음되지 않았습니다.";
 "No microphone access, and system audio recording is off: there is nothing to record." = "마이크 접근 권한이 없고 시스템 오디오 녹음도 꺼져 있어 녹음할 내용이 없습니다.";

@@ -275,7 +275,7 @@ enum Finalizer {
             try jsonData(meta).write(to: raw.appendingPathComponent("session.json"), options: .atomic)
             return true
         } catch {
-            NSLog("MeetingRecorder: can't write %@/session.json: %@", raw.path, "\(error)")
+            NSLog("Meep: can't write %@/session.json: %@", raw.path, "\(error)")
             return false
         }
     }

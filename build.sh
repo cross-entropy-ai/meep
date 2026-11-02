@@ -1,9 +1,9 @@
 #!/bin/bash
-# Build MeetingRecorder.app with swiftc (no Xcode needed) and sign it.
+# Build Meep.app with swiftc (no Xcode needed) and sign it.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APP=build/MeetingRecorder.app
+APP=build/Meep.app
 WEBRTC=vendor/webrtc   # built by scripts/build-webrtc.sh
 [ -f "$WEBRTC/lib/libwebrtc_apm.a" ] || ./scripts/build-webrtc.sh
 FFMPEG=vendor/ffmpeg   # built by scripts/build-ffmpeg.sh
@@ -35,7 +35,7 @@ swiftc -O -swift-version 6 \
   -target arm64-apple-macos15.0 \
   -framework AppKit -framework AVFoundation -framework CoreAudio -framework ServiceManagement -framework SwiftUI \
   -import-objc-header Native/webrtc_aec.h build/obj/webrtc_aec.o "$WEBRTC/lib/libwebrtc_apm.a" -lc++ \
-  Sources/*.swift -o "$APP/Contents/MacOS/MeetingRecorder"
+  Sources/*.swift -o "$APP/Contents/MacOS/Meep"
 
 # A stable signing identity keeps TCC permissions across rebuilds; fall back to ad-hoc.
 # Release builds: SIGN_IDENTITY="Developer ID Application: …" (see scripts/release.sh).
@@ -45,8 +45,8 @@ SIGN=(codesign --force --options runtime --sign "${IDENTITY:--}")
 [[ "$IDENTITY" == "Developer ID"* ]] && SIGN+=(--timestamp)
 # Nested code first: the app's signature seals the already-signed helper.
 "${SIGN[@]}" "$APP/Contents/Helpers/ffmpeg"
-"${SIGN[@]}" --entitlements MeetingRecorder.entitlements "$APP"
+"${SIGN[@]}" --entitlements Meep.entitlements "$APP"
 echo "Built $APP (signed with: ${IDENTITY:-ad-hoc})"
 
-# Register with LaunchServices so `open meetingrecorder://…` resolves to this build.
+# Register with LaunchServices so `open meep://…` resolves to this build.
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP"

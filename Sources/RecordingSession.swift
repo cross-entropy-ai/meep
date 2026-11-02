@@ -83,7 +83,7 @@ final class RecordingSession: @unchecked Sendable {
     static let systemStallSeconds = 5.0
     static let lostAfterAttempts = 3
 
-    /// See AppSettings.recordingsFolder ($MEETINGRECORDER_ROOT, `recordingsFolder` default).
+    /// See AppSettings.recordingsFolder ($MEEP_ROOT, `recordingsFolder` default).
     static var rootDirectory: URL { AppSettings.recordingsFolder }
 
     /// Opens the recordings folder in Finder (creating it if needed).
@@ -231,7 +231,7 @@ final class RecordingSession: @unchecked Sendable {
         let hasSys = (systemWriter?.buffersCaptured ?? 0) > 0
         let hasMic = (micWriter?.buffersCaptured ?? 0) > 0
         if hasSys && systemWriter?.peak == 0 {
-            silenceWarnings.append(tr("System audio was silent the whole time. If there was sound, allow MeetingRecorder in System Settings › Privacy & Security › Screen & System Audio Recording › System Audio Recording Only."))
+            silenceWarnings.append(tr("System audio was silent the whole time. If there was sound, allow Meep in System Settings › Privacy & Security › Screen & System Audio Recording › System Audio Recording Only."))
         }
         if hasMic && micWriter?.peak == 0 {
             silenceWarnings.append(tr("The microphone was silent the whole time. Check the microphone permission or input device."))
@@ -371,7 +371,7 @@ final class RecordingSession: @unchecked Sendable {
             interruptions[idx].lastError = err
             let backoff = min(30, pow(2, Double(min(interruptions[idx].attempts, 5))))  // 2,4,8,16,30 s
             nextRetry[track] = now() + backoff
-            NSLog("MeetingRecorder: restart %@ failed (attempt %d): %@", track.rawValue, interruptions[idx].attempts, err)
+            NSLog("Meep: restart %@ failed (attempt %d): %@", track.rawValue, interruptions[idx].attempts, err)
         } else {
             interruptions[idx].device = track == .system ? system?.outputDeviceName : mic?.inputDeviceName
             interruptions[idx].lastError = nil

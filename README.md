@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/app-icon.png" width="128" alt="MeetingRecorder icon">
+  <img src="assets/app-icon.png" width="128" alt="Meep icon">
 </p>
 
-<h1 align="center">MeetingRecorder</h1>
+<h1 align="center">Meep</h1>
 
 <p align="center">A macOS menu bar app that records your meetings: everyone else (from your Mac's audio) and you (from the microphone).</p>
 
@@ -23,10 +23,10 @@
 Requires macOS 15+ on Apple Silicon.
 
 ```bash
-brew install --cask cross-entropy-ai/tap/meetingrecorder
+brew install --cask cross-entropy-ai/tap/meep
 ```
 
-This installs `MeetingRecorder.app` into `/Applications` and the `meetingrecorder` command (see [Automation](#automation)). Upgrade with `brew upgrade --cask meetingrecorder`, or download the zip from [Releases](https://github.com/cross-entropy-ai/agent-meetingrecorder/releases).
+This installs `Meep.app` into `/Applications` and the `meep` command (see [Automation](#automation)). Upgrade with `brew upgrade --cask meep`, or download the zip from [Releases](https://github.com/cross-entropy-ai/meep/releases).
 
 The first time you record, macOS asks for **Microphone** and **System Audio Recording** access. Allow both.
 
@@ -36,10 +36,10 @@ Needs the Xcode Command Line Tools.
 
 ```bash
 brew install meson ninja
-git clone https://github.com/cross-entropy-ai/agent-meetingrecorder.git
-cd agent-meetingrecorder
+git clone https://github.com/cross-entropy-ai/meep.git
+cd meep
 ./build.sh                      # the first build takes a few minutes (builds WebRTC and ffmpeg)
-open build/MeetingRecorder.app
+open build/Meep.app
 ```
 
 `scripts/release.sh` builds the signed, notarized zip for a release.
@@ -64,7 +64,7 @@ Preferences (⌘,) let you change the hotkey, language and more. The Audio tab s
 The app binary doubles as a command-line tool:
 
 ```bash
-mr=meetingrecorder     # installed by Homebrew; otherwise /Applications/MeetingRecorder.app/Contents/MacOS/MeetingRecorder
+mr=meep     # installed by Homebrew; otherwise /Applications/Meep.app/Contents/MacOS/Meep
 
 dir=$($mr start --wait)          # starts recording (launching the app if needed), prints the folder;
                                  #   exit 1 with the reason if it can't start
@@ -79,15 +79,15 @@ $mr mix --system call.caf --mic me_clean.wav -o meeting.m4a
 Results (a folder or file path, or JSON) go to stdout; messages and progress go to stderr.
 Exit codes: `0` ok, `1` failed, `2` bad usage, `3` timed out. `$mr help` lists everything.
 Recordings started or stopped from the command line show no alerts and open no Finder window.
-`open "meetingrecorder://start"` and `…://stop` work too, without waiting (add `?quiet` for the same silence).
-Settings can be changed with `defaults write com.junyi.MeetingRecorder <key> -bool|-string <value>` (e.g. `autoLevel -bool true`); `$mr help` lists the keys.
+`open "meep://start"` and `…://stop` work too, without waiting (add `?quiet` for the same silence).
+Settings can be changed with `defaults write com.junyi.Meep <key> -bool|-string <value>` (e.g. `autoLevel -bool true`); `$mr help` lists the keys.
 
 **Run After Saving** (Preferences › Agent) runs a command of your choice after each recording, e.g. a transcription script, with the recording folder as `$1`. It runs via `zsh -lc`, which reads `~/.zprofile` but not `~/.zshrc`, so set `PATH` there or use full paths. Its progress and exit status appear in `raw/session.json` under `after_save`.
 
 To save recordings somewhere else, use Preferences › General › Recordings Folder › Change…, or:
 
 ```bash
-defaults write com.junyi.MeetingRecorder recordingsFolder -string ~/Meetings
+defaults write com.junyi.Meep recordingsFolder -string ~/Meetings
 ```
 
 ## License

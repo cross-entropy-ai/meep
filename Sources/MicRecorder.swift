@@ -61,7 +61,7 @@ final class MicRecorder: @unchecked Sendable {
                     .init(enableAdvancedDucking: false, duckingLevel: .min)
                 voiceProcessingActive = true
             } catch {
-                NSLog("MeetingRecorder: voice processing unavailable (%@), recording raw mic", "\(error)")
+                NSLog("Meep: voice processing unavailable (%@), recording raw mic", "\(error)")
             }
         }
 
@@ -104,7 +104,7 @@ final class MicRecorder: @unchecked Sendable {
         inputDeviceID = dev
         inputDeviceName = deviceName(dev) ?? "?"
         if voiceProcessing {
-            NSLog("MeetingRecorder: voice processing needs the default input; recording %@ raw", inputDeviceName)
+            NSLog("Meep: voice processing needs the default input; recording %@ raw", inputDeviceName)
         }
         guard let fmt = Self.inputFormat(dev) else {
             throw CAError(what: "No input format on \(inputDeviceName)", status: -1)

@@ -1,4 +1,4 @@
-/* MeetingRecorder UI strings (English source; template for new languages). */
+/* Meep UI strings (English source; template for new languages). */
 
 "Follow System" = "Follow System";
 "Mixing failed (the tracks are kept): " = "Mixing failed (the tracks are kept): ";
@@ -7,7 +7,7 @@
 "Finished unfinished recordings" = "Finished unfinished recordings";
 "These recordings were not finished last time (the app quit or the Mac shut down). They are processed and saved now:" = "These recordings were not finished last time (the app quit or the Mac shut down). They are processed and saved now:";
 "No microphone access" = "No microphone access";
-"Allow MeetingRecorder in System Settings › Privacy & Security › Microphone. This recording captures system audio only." = "Allow MeetingRecorder in System Settings › Privacy & Security › Microphone. This recording captures system audio only.";
+"Allow Meep in System Settings › Privacy & Security › Microphone. This recording captures system audio only." = "Allow Meep in System Settings › Privacy & Security › Microphone. This recording captures system audio only.";
 "Can't start recording" = "Can't start recording";
 "Recording saved with warnings" = "Recording saved with warnings";
 "Open Recordings Folder" = "Open Recordings Folder";
@@ -30,7 +30,7 @@
 "Microphone failed to start: " = "Microphone failed to start: ";
 "System audio write error: " = "System audio write error: ";
 "Microphone write error: " = "Microphone write error: ";
-"System audio was silent the whole time. If there was sound, allow MeetingRecorder in System Settings › Privacy & Security › Screen & System Audio Recording › System Audio Recording Only." = "System audio was silent the whole time. If there was sound, allow MeetingRecorder in System Settings › Privacy & Security › Screen & System Audio Recording › System Audio Recording Only.";
+"System audio was silent the whole time. If there was sound, allow Meep in System Settings › Privacy & Security › Screen & System Audio Recording › System Audio Recording Only." = "System audio was silent the whole time. If there was sound, allow Meep in System Settings › Privacy & Security › Screen & System Audio Recording › System Audio Recording Only.";
 "The microphone was silent the whole time. Check the microphone permission or input device." = "The microphone was silent the whole time. Check the microphone permission or input device.";
 "Microphone stopped at %1$@ and could not be restored (%2$@)." = "Microphone stopped at %1$@ and could not be restored (%2$@).";
 "System audio stopped at %1$@ and could not be restored (%2$@)." = "System audio stopped at %1$@ and could not be restored (%2$@).";
@@ -59,7 +59,7 @@
 "Agents and scripts can start and stop recording with the URLs below, check progress with the status command, and read the results from the recordings folder: mixed.m4a, plus the separate tracks and session.json in raw/." = "Agents and scripts can start and stop recording with the URLs below, check progress with the status command, and read the results from the recordings folder: mixed.m4a, plus the separate tracks and session.json in raw/.";
 "Command Line" = "Command Line";
 "Run After Saving" = "Run After Saving";
-"A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEETINGRECORDER_DIR. Output goes to raw/after-save.log." = "A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEETINGRECORDER_DIR. Output goes to raw/after-save.log.";
+"A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEEP_DIR. Output goes to raw/after-save.log." = "A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEEP_DIR. Output goes to raw/after-save.log.";
 "Copy: " = "Copy: ";
 "Version" = "Version";
 "Privacy Policy" = "Privacy Policy";
@@ -109,7 +109,7 @@
 "Choose" = "Choose";
 "Choose where to save recordings." = "Choose where to save recordings.";
 "Can't save to %@: no write permission." = "Can't save to %@: no write permission.";
-"Set by MEETINGRECORDER_ROOT." = "Set by MEETINGRECORDER_ROOT.";
+"Set by MEEP_ROOT." = "Set by MEEP_ROOT.";
 "The microphone recorded nothing. Check the input device." = "The microphone recorded nothing. Check the input device.";
 "System audio recorded nothing." = "System audio recorded nothing.";
 "No microphone access, and system audio recording is off: there is nothing to record." = "No microphone access, and system audio recording is off: there is nothing to record.";

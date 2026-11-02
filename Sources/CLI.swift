@@ -42,7 +42,7 @@ enum CLI {
             }
             exit(code.rawValue)
         } catch let e as UsageError {
-            printErr("error: \(e.message)\nusage: MeetingRecorder help")
+            printErr("error: \(e.message)\nusage: Meep help")
             exit(Exit.usage.rawValue)
         } catch {
             printErr("error: \(error)")
@@ -158,31 +158,31 @@ enum CLI {
         return (a.has("--wait"), timeout)
     }
 
-    /// The app reads the recordings folder from its settings; $MEETINGRECORDER_ROOT only reaches
+    /// The app reads the recordings folder from its settings; $MEEP_ROOT only reaches
     /// this process. If they differ, --wait and status would watch the wrong folder forever.
     private static func checkSameFolderAsApp() throws(UsageError) {
         guard AppSettings.recordingsFolderFromEnvironment else { return }
         let app = AppSettings.appRecordingsFolder.resolvingSymlinksInPath().path
         let mine = AppSettings.recordingsFolder.resolvingSymlinksInPath().path
         guard mine == app else {
-            throw UsageError(message: "MEETINGRECORDER_ROOT (\(mine)) differs from the app's recordings folder (\(app)); "
-                             + "unset it, or set the folder with defaults write com.junyi.MeetingRecorder recordingsFolder")
+            throw UsageError(message: "MEEP_ROOT (\(mine)) differs from the app's recordings folder (\(app)); "
+                             + "unset it, or set the folder with defaults write com.junyi.Meep recordingsFolder")
         }
     }
 
-    /// Sends meetingrecorder://<command>?quiet through LaunchServices (`open -g`), which launches
+    /// Sends meep://<command>?quiet through LaunchServices (`open -g`), which launches
     /// the app in the background if it is not running. `quiet`: no alerts or Finder window for
     /// recordings a script starts or stops.
     static func send(_ command: String) throws {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        p.arguments = ["-g", "meetingrecorder://\(command)?quiet"]
+        p.arguments = ["-g", "meep://\(command)?quiet"]
         p.standardInput = FileHandle.nullDevice
         p.standardOutput = FileHandle.standardError  // keep stdout for results
         try p.run()
         p.waitUntilExit()
         guard p.terminationStatus == 0 else {
-            throw Failure(description: "could not open meetingrecorder://\(command) (is MeetingRecorder installed?)")
+            throw Failure(description: "could not open meep://\(command) (is Meep installed?)")
         }
     }
 
@@ -261,7 +261,7 @@ enum CLI {
         let live = (meta["pid"] as? Int32).map { kill($0, 0) == 0 } ?? false
         throw Failure(description: live
             ? "\(dir.path) is still being recorded or saved (status \(status))"
-            : "\(dir.path) is unfinished (status \(status)); open MeetingRecorder to finish it first")
+            : "\(dir.path) is unfinished (status \(status)); open Meep to finish it first")
     }
 
     /// `remix <recording-dir> [--json] [-v]`: re-mix a recording's tracks into mixed.m4a and

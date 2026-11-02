@@ -14,11 +14,11 @@ enum Mixer {
 
     struct Result { var gainsDB: [String: Double] = [:]; var loudnessLUFS: [String: Double] = [:] }
 
-    /// The ffmpeg bundled at MeetingRecorder.app/Contents/Helpers/ffmpeg (built by scripts/build-ffmpeg.sh).
-    /// Bundle.main is the .app also for the CLI (Contents/MacOS/MeetingRecorder run directly).
-    /// MEETINGRECORDER_FFMPEG overrides it, for development.
+    /// The ffmpeg bundled at Meep.app/Contents/Helpers/ffmpeg (built by scripts/build-ffmpeg.sh).
+    /// Bundle.main is the .app also for the CLI (Contents/MacOS/Meep run directly).
+    /// MEEP_FFMPEG overrides it, for development.
     static func ffmpegPath() -> String? {
-        let env = ProcessInfo.processInfo.environment["MEETINGRECORDER_FFMPEG"] ?? ""
+        let env = ProcessInfo.processInfo.environment["MEEP_FFMPEG"] ?? ""
         let path = if env.isEmpty {
             Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/ffmpeg").path
         } else {
@@ -27,8 +27,8 @@ enum Mixer {
         return FileManager.default.isExecutableFile(atPath: path) ? path : nil
     }
 
-    static let ffmpegMissing = "ffmpeg not found (MeetingRecorder.app/Contents/Helpers/ffmpeg, "
-        + "or $MEETINGRECORDER_FFMPEG); rebuild the app with ./build.sh"
+    static let ffmpegMissing = "ffmpeg not found (Meep.app/Contents/Helpers/ffmpeg, "
+        + "or $MEEP_FFMPEG); rebuild the app with ./build.sh"
 
     static func mix(system: URL?, mic: URL?, output: URL, progress: ((Double) -> Void)? = nil) throws -> Result {
         var result = Result()

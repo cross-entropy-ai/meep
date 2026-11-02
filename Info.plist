@@ -17,13 +17,13 @@
         <string>pt-BR</string>
     </array>
     <key>CFBundleIdentifier</key>
-    <string>com.junyi.MeetingRecorder</string>
+    <string>com.junyi.Meep</string>
     <key>CFBundleName</key>
-    <string>MeetingRecorder</string>
+    <string>Meep</string>
     <key>CFBundleDisplayName</key>
-    <string>MeetingRecorder</string>
+    <string>Meep</string>
     <key>CFBundleExecutable</key>
-    <string>MeetingRecorder</string>
+    <string>Meep</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>
@@ -43,7 +43,7 @@
     <string></string>
     <!-- "owner/repo": Check for Updates compares CFBundleShortVersionString with its latest GitHub release -->
     <key>MRUpdateGitHubRepo</key>
-    <string>cross-entropy-ai/agent-meetingrecorder</string>
+    <string>cross-entropy-ai/meep</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
@@ -54,10 +54,10 @@
     <array>
         <dict>
             <key>CFBundleURLName</key>
-            <string>com.junyi.MeetingRecorder</string>
+            <string>com.junyi.Meep</string>
             <key>CFBundleURLSchemes</key>
             <array>
-                <string>meetingrecorder</string>
+                <string>meep</string>
             </array>
         </dict>
     </array>

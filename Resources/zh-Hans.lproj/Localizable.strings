@@ -1,4 +1,4 @@
-/* MeetingRecorder UI strings. Key = English source text. */
+/* Meep UI strings. Key = English source text. */
 
 "Follow System" = "跟随系统";
 "Mixing failed (the tracks are kept): " = "混音失败（分轨文件仍在）: ";
@@ -7,7 +7,7 @@
 "Finished unfinished recordings" = "已处理完未完成的录音";
 "These recordings were not finished last time (the app quit or the Mac shut down). They are processed and saved now:" = "以下录音上次没有处理完（程序退出或电脑关机），现已处理并保存：";
 "No microphone access" = "没有麦克风权限";
-"Allow MeetingRecorder in System Settings › Privacy & Security › Microphone. This recording captures system audio only." = "请到 系统设置 › 隐私与安全性 › 麦克风 中允许 MeetingRecorder。本次只录系统声音。";
+"Allow Meep in System Settings › Privacy & Security › Microphone. This recording captures system audio only." = "请到 系统设置 › 隐私与安全性 › 麦克风 中允许 Meep。本次只录系统声音。";
 "Can't start recording" = "无法开始录制";
 "Recording saved with warnings" = "录制已保存，但有提示";
 "Open Recordings Folder" = "打开录音文件夹";
@@ -30,7 +30,7 @@
 "Microphone failed to start: " = "麦克风录制失败: ";
 "System audio write error: " = "系统声音写文件出错: ";
 "Microphone write error: " = "麦克风写文件出错: ";
-"System audio was silent the whole time. If there was sound, allow MeetingRecorder in System Settings › Privacy & Security › Screen & System Audio Recording › System Audio Recording Only." = "系统声音全程无信号。若会议中确实有声音，请到 系统设置 › 隐私与安全性 › 屏幕与系统录音 › 仅系统录音 中允许 MeetingRecorder。";
+"System audio was silent the whole time. If there was sound, allow Meep in System Settings › Privacy & Security › Screen & System Audio Recording › System Audio Recording Only." = "系统声音全程无信号。若会议中确实有声音，请到 系统设置 › 隐私与安全性 › 屏幕与系统录音 › 仅系统录音 中允许 Meep。";
 "The microphone was silent the whole time. Check the microphone permission or input device." = "麦克风全程无信号，请检查麦克风权限或输入设备。";
 "Microphone stopped at %1$@ and could not be restored (%2$@)." = "麦克风在 %1$@ 中断后未能恢复（%2$@）。";
 "System audio stopped at %1$@ and could not be restored (%2$@)." = "系统声音在 %1$@ 中断后未能恢复（%2$@）。";
@@ -59,7 +59,7 @@
 "Agents and scripts can start and stop recording with the URLs below, check progress with the status command, and read the results from the recordings folder: mixed.m4a, plus the separate tracks and session.json in raw/." = "Agent 和脚本可以用下面的 URL 开始、停止录制，用 status 查询进度，再从录音文件夹读取结果：mixed.m4a，以及 raw/ 里的分轨和 session.json。";
 "Command Line" = "命令行";
 "Run After Saving" = "保存后运行";
-"A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEETINGRECORDER_DIR. Output goes to raw/after-save.log." = "每次录音保存后执行的 shell 命令。录音文件夹作为 $1 传入，也在 $MEETINGRECORDER_DIR 里。输出写入 raw/after-save.log。";
+"A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEEP_DIR. Output goes to raw/after-save.log." = "每次录音保存后执行的 shell 命令。录音文件夹作为 $1 传入，也在 $MEEP_DIR 里。输出写入 raw/after-save.log。";
 "Copy: " = "复制：";
 "Version" = "版本";
 "Privacy Policy" = "隐私政策";
@@ -109,7 +109,7 @@
 "Choose" = "选择";
 "Choose where to save recordings." = "选择录音的保存位置。";
 "Can't save to %@: no write permission." = "无法保存到 %@：没有写入权限。";
-"Set by MEETINGRECORDER_ROOT." = "由 MEETINGRECORDER_ROOT 指定。";
+"Set by MEEP_ROOT." = "由 MEEP_ROOT 指定。";
 "The microphone recorded nothing. Check the input device." = "麦克风什么也没录到，请检查输入设备。";
 "System audio recorded nothing." = "系统声音什么也没录到。";
 "No microphone access, and system audio recording is off: there is nothing to record." = "没有麦克风权限，系统声音录制也已关闭：没有可录制的内容。";

@@ -359,7 +359,7 @@ struct GeneralPreferencesView: View {
                 if let e = state.recordingsFolderError {
                     Text(e).font(.caption).foregroundStyle(.red)
                 } else if AppSettings.recordingsFolderFromEnvironment {
-                    Text(tr("Set by MEETINGRECORDER_ROOT.")).font(.caption).foregroundStyle(.secondary)
+                    Text(tr("Set by MEEP_ROOT.")).font(.caption).foregroundStyle(.secondary)
                 } else if state.isRecording {
                     Text(tr("Can't change while recording.")).font(.caption).foregroundStyle(.secondary)
                 }
@@ -546,8 +546,8 @@ struct AgentPreferencesView: View {
     @AppStorage(AppSettings.Key.language) private var language = AppLanguage.system.rawValue
     @AppStorage(AppSettings.Key.afterSaveCommand) private var afterSaveCommand = AppSettings.Default.afterSaveCommand
 
-    static let urls = ["meetingrecorder://start", "meetingrecorder://stop", "meetingrecorder://preferences"]
-    private var helpCommand: String { "\"\(Bundle.main.executableURL?.path ?? "MeetingRecorder")\" --help" }
+    static let urls = ["meep://start", "meep://stop", "meep://preferences"]
+    private var helpCommand: String { "\"\(Bundle.main.executableURL?.path ?? "Meep")\" --help" }
 
     var body: some View {
         Form {
@@ -575,7 +575,7 @@ struct AgentPreferencesView: View {
             } header: {
                 Text(tr("Run After Saving"))
             } footer: {
-                Text(tr("A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEETINGRECORDER_DIR. Output goes to raw/after-save.log."))
+                Text(tr("A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEEP_DIR. Output goes to raw/after-save.log."))
                     .font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

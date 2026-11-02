@@ -22,11 +22,19 @@ enum NoiseSuppression: String, CaseIterable {
     }
 }
 
-/// User settings (UserDefaults domain com.junyi.MeetingRecorder). Most are written by
+/// User settings (UserDefaults domain com.junyi.Meep). Most are written by
 /// Preferences through @AppStorage with the same key and default; see `help` for the keys.
-/// CLI: `defaults write com.junyi.MeetingRecorder echoCancellation -string off|apple|webrtc`
+/// CLI: `defaults write com.junyi.Meep echoCancellation -string off|apple|webrtc`
 enum AppSettings {
     private static var d: UserDefaults { .standard }
+
+    /// Meep was called MeetingRecorder (com.junyi.MeetingRecorder) before 1.0. Copies those
+    /// settings once, if this domain has none yet; the old domain is left as it is.
+    static func migrateFromMeetingRecorder() {
+        guard let id = Bundle.main.bundleIdentifier, d.persistentDomain(forName: id)?.isEmpty ?? true,
+              let old = d.persistentDomain(forName: "com.junyi.MeetingRecorder"), !old.isEmpty else { return }
+        d.setPersistentDomain(old, forName: id)
+    }
 
     /// UserDefaults keys of the settings Preferences shows (also used by its @AppStorage).
     enum Key {
@@ -55,14 +63,14 @@ enum AppSettings {
         static let openFolderAfterSaving = true
     }
 
-    /// Where recordings are saved: $MEETINGRECORDER_ROOT, else the `recordingsFolder` default
+    /// Where recordings are saved: $MEEP_ROOT, else the `recordingsFolder` default
     /// (a path, `~` expanded), else ~/Documents/MeetingRecordings. Set in Preferences › General,
-    /// or `defaults write com.junyi.MeetingRecorder recordingsFolder -string ~/Meetings`
+    /// or `defaults write com.junyi.Meep recordingsFolder -string ~/Meetings`
     static var recordingsFolder: URL {
-        folder(ProcessInfo.processInfo.environment["MEETINGRECORDER_ROOT"]) ?? appRecordingsFolder
+        folder(ProcessInfo.processInfo.environment["MEEP_ROOT"]) ?? appRecordingsFolder
     }
 
-    /// The folder the app uses: the setting, else the default ($MEETINGRECORDER_ROOT never reaches
+    /// The folder the app uses: the setting, else the default ($MEEP_ROOT never reaches
     /// an app launched through LaunchServices).
     static var appRecordingsFolder: URL {
         folder(d.string(forKey: Key.recordingsFolder)) ?? defaultRecordingsFolder
@@ -78,9 +86,9 @@ enum AppSettings {
             .appendingPathComponent("Documents/MeetingRecordings", isDirectory: true)
     }
 
-    /// $MEETINGRECORDER_ROOT wins over the setting, so Preferences can't change the folder then.
+    /// $MEEP_ROOT wins over the setting, so Preferences can't change the folder then.
     static var recordingsFolderFromEnvironment: Bool {
-        !(ProcessInfo.processInfo.environment["MEETINGRECORDER_ROOT"] ?? "")
+        !(ProcessInfo.processInfo.environment["MEEP_ROOT"] ?? "")
             .trimmingCharacters(in: .whitespaces).isEmpty
     }
 
@@ -136,7 +144,7 @@ enum AppSettings {
     }
 
     /// Shell command run after each recording is saved, with the recording folder as $1
-    /// (also in $MEETINGRECORDER_DIR). Empty = none.
+    /// (also in $MEEP_DIR). Empty = none.
     static var afterSaveCommand: String {
         d.string(forKey: Key.afterSaveCommand) ?? Default.afterSaveCommand
     }
@@ -184,7 +192,7 @@ enum AppInfo {
     private static func string(_ key: String) -> String {
         (Bundle.main.object(forInfoDictionaryKey: key) as? String) ?? ""
     }
-    static var name: String { string("CFBundleDisplayName").isEmpty ? "MeetingRecorder" : string("CFBundleDisplayName") }
+    static var name: String { string("CFBundleDisplayName").isEmpty ? "Meep" : string("CFBundleDisplayName") }
     static var version: String { string("CFBundleShortVersionString") }
     static var build: String { string("CFBundleVersion") }
     static var copyright: String { string("NSHumanReadableCopyright") }

@@ -148,7 +148,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func handleURL(_ event: NSAppleEventDescriptor, _ reply: NSAppleEventDescriptor) {
         guard let s = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
               let url = URL(string: s), let host = url.host else { return }
-        // URL scheme: meetingrecorder://start|stop|preferences[/general|/audio|/agent|/about]
+        // URL scheme: meep://start|stop|preferences[/general|/audio|/agent|/about]
         // `?quiet` (the CLI adds it): no alerts and no Finder window for that recording; outcomes
         // are in session.json and last-start.json instead, for scripts that nobody watches.
         let command = host + (url.path.hasSuffix("/") ? String(url.path.dropLast()) : url.path)
@@ -166,7 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "preferences/audio": preferences.show(tab: .audio)
         case "preferences/agent": preferences.show(tab: .agent)
         case "preferences/about": preferences.show(tab: .about)
-        default: NSLog("MeetingRecorder: unknown URL command %@", host)
+        default: NSLog("Meep: unknown URL command %@", host)
         }
     }
 
@@ -223,7 +223,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                       settingsURL: micAllowed ? nil : Permissions.microphoneSettingsURL.absoluteString)
             } else if !micAllowed {
                 alert(tr("No microphone access"),
-                      tr("Allow MeetingRecorder in System Settings › Privacy & Security › Microphone. This recording captures system audio only."),
+                      tr("Allow Meep in System Settings › Privacy & Security › Microphone. This recording captures system audio only."),
                       settingsURL: Permissions.microphoneSettingsURL.absoluteString)
             }
         }
@@ -309,7 +309,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             icon = MenuBarIcons.saving
             toggleItem.title = tr("Saving… %@", percent)
             toggleItem.isEnabled = false
-            button.toolTip = "MeetingRecorder: " + tr("saving")
+            button.toolTip = "Meep: " + tr("saving")
         } else if let s = session {
             let elapsed = RecordingSession.clock(Date().timeIntervalSince(s.startedAt))
             toggleItem.title = tr("Stop Recording (%@)", elapsed)
@@ -330,17 +330,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                      : tr("System audio lost, retrying"))
                 healthItem.isHidden = false
             }
-            button.toolTip = "MeetingRecorder: " + tr("recording") + " \(elapsed)"
+            button.toolTip = "Meep: " + tr("recording") + " \(elapsed)"
         } else {
             toggleItem.title = tr("Start Recording")
             toggleItem.isEnabled = true
-            button.toolTip = "MeetingRecorder"
+            button.toolTip = "Meep"
             if saving > 0 {
                 icon = MenuBarIcons.saving
                 label = percent
                 healthItem.title = tr("Saving… %@", percent)
                 healthItem.isHidden = false
-                button.toolTip = "MeetingRecorder: " + tr("saving") + " \(percent)"
+                button.toolTip = "Meep: " + tr("saving") + " \(percent)"
             } else if recoveringPrevious {
                 icon = MenuBarIcons.saving
                 label = percent
@@ -411,7 +411,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 // MARK: - CLI (see CLI.swift; anything that is not a CLI invocation launches the menu bar app)
 
-// Run through a symlink (e.g. Homebrew's `meetingrecorder` in PATH), Bundle.main would be the
+// Run through a symlink (e.g. Homebrew's `meep` in PATH), Bundle.main would be the
 // symlink's folder: no Info.plist, translations or ffmpeg. Re-exec the real binary inside the .app.
 if let exe = Bundle.main.executableURL?.standardizedFileURL,
    case let real = exe.resolvingSymlinksInPath(), real.path != exe.path {
@@ -421,6 +421,8 @@ if let exe = Bundle.main.executableURL?.standardizedFileURL,
     perror("execv \(real.path)")
     exit(1)
 }
+
+AppSettings.migrateFromMeetingRecorder()
 
 let cliArguments = Array(CommandLine.arguments.dropFirst())
 if CLI.isInvocation(cliArguments) { CLI.main(cliArguments) }

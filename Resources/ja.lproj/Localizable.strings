@@ -1,4 +1,4 @@
-/* MeetingRecorder UI strings. Key = English source text. */
+/* Meep UI strings. Key = English source text. */
 
 "Follow System" = "システムに従う";
 "Mixing failed (the tracks are kept): " = "ミックスに失敗しました（個別トラックは残っています）：";
@@ -7,7 +7,7 @@
 "Finished unfinished recordings" = "未完了の録音を処理しました";
 "These recordings were not finished last time (the app quit or the Mac shut down). They are processed and saved now:" = "以下の録音は前回処理が完了していませんでした（アプリの終了または Mac のシャットダウン）。処理して保存しました：";
 "No microphone access" = "マイクへのアクセスがありません";
-"Allow MeetingRecorder in System Settings › Privacy & Security › Microphone. This recording captures system audio only." = "「システム設定 › プライバシーとセキュリティ › マイク」で MeetingRecorder を許可してください。今回はシステムオーディオのみ録音します。";
+"Allow Meep in System Settings › Privacy & Security › Microphone. This recording captures system audio only." = "「システム設定 › プライバシーとセキュリティ › マイク」で Meep を許可してください。今回はシステムオーディオのみ録音します。";
 "Can't start recording" = "録音を開始できません";
 "Recording saved with warnings" = "録音を保存しましたが、警告があります";
 "Open Recordings Folder" = "録音フォルダを開く";
@@ -30,7 +30,7 @@
 "Microphone failed to start: " = "マイクの録音を開始できません：";
 "System audio write error: " = "システムオーディオの書き込みエラー：";
 "Microphone write error: " = "マイクの書き込みエラー：";
-"System audio was silent the whole time. If there was sound, allow MeetingRecorder in System Settings › Privacy & Security › Screen & System Audio Recording › System Audio Recording Only." = "システムオーディオがずっと無音でした。音が出ていた場合は、「システム設定 › プライバシーとセキュリティ › 画面収録とシステムオーディオ録音 › システムオーディオ録音のみ」で MeetingRecorder を許可してください。";
+"System audio was silent the whole time. If there was sound, allow Meep in System Settings › Privacy & Security › Screen & System Audio Recording › System Audio Recording Only." = "システムオーディオがずっと無音でした。音が出ていた場合は、「システム設定 › プライバシーとセキュリティ › 画面収録とシステムオーディオ録音 › システムオーディオ録音のみ」で Meep を許可してください。";
 "The microphone was silent the whole time. Check the microphone permission or input device." = "マイクがずっと無音でした。マイクのアクセス許可または入力デバイスを確認してください。";
 "Microphone stopped at %1$@ and could not be restored (%2$@)." = "マイクが %1$@ に停止し、復旧できませんでした（%2$@）。";
 "System audio stopped at %1$@ and could not be restored (%2$@)." = "システムオーディオが %1$@ に停止し、復旧できませんでした（%2$@）。";
@@ -59,7 +59,7 @@
 "Agents and scripts can start and stop recording with the URLs below, check progress with the status command, and read the results from the recordings folder: mixed.m4a, plus the separate tracks and session.json in raw/." = "エージェントやスクリプトは、下の URL で録音を開始・停止し、status で進捗を確認し、録音フォルダから結果を読み取れます：mixed.m4a、および raw/ 内の個別トラックと session.json。";
 "Command Line" = "コマンドライン";
 "Run After Saving" = "保存後に実行";
-"A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEETINGRECORDER_DIR. Output goes to raw/after-save.log." = "録音を保存するたびに実行するシェルコマンド。録音フォルダは $1 と $MEETINGRECORDER_DIR で渡されます。出力は raw/after-save.log に書き込まれます。";
+"A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEEP_DIR. Output goes to raw/after-save.log." = "録音を保存するたびに実行するシェルコマンド。録音フォルダは $1 と $MEEP_DIR で渡されます。出力は raw/after-save.log に書き込まれます。";
 "Copy: " = "コピー：";
 "Version" = "バージョン";
 "Privacy Policy" = "プライバシーポリシー";
@@ -109,7 +109,7 @@
 "Choose" = "選択";
 "Choose where to save recordings." = "録音の保存先を選択してください。";
 "Can't save to %@: no write permission." = "%@ に保存できません：書き込み権限がありません。";
-"Set by MEETINGRECORDER_ROOT." = "MEETINGRECORDER_ROOT で指定されています。";
+"Set by MEEP_ROOT." = "MEEP_ROOT で指定されています。";
 "The microphone recorded nothing. Check the input device." = "マイクに何も録音されませんでした。入力デバイスを確認してください。";
 "System audio recorded nothing." = "システムオーディオに何も録音されませんでした。";
 "No microphone access, and system audio recording is off: there is nothing to record." = "マイクへのアクセスがなく、システムオーディオの録音もオフです。録音するものがありません。";

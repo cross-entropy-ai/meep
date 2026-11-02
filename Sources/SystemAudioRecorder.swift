@@ -36,7 +36,7 @@ final class SystemAudioRecorder: @unchecked Sendable {
         // 1. Global stereo tap of every process' output, nothing excluded.
         let desc = CATapDescription(stereoGlobalTapButExcludeProcesses: [])
         desc.uuid = UUID()
-        desc.name = "MeetingRecorder System Tap"
+        desc.name = "Meep System Tap"
         desc.isPrivate = true
         desc.muteBehavior = .unmuted
         try check(AudioHardwareCreateProcessTap(desc, &tapID), "AudioHardwareCreateProcessTap")
@@ -52,7 +52,7 @@ final class SystemAudioRecorder: @unchecked Sendable {
         outputDeviceName = deviceName(outputDeviceID) ?? "?"
         let outputUID = try readStringProperty(outputDeviceID, kAudioDevicePropertyDeviceUID)
         let aggDesc: [String: Any] = [
-            kAudioAggregateDeviceNameKey: "MeetingRecorder Aggregate",
+            kAudioAggregateDeviceNameKey: "Meep Aggregate",
             kAudioAggregateDeviceUIDKey: UUID().uuidString,
             kAudioAggregateDeviceMainSubDeviceKey: outputUID,
             kAudioAggregateDeviceIsPrivateKey: true,

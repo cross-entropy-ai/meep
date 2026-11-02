@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build a minimal, LGPL-only, static ffmpeg (arm64, macOS 15.0+) into vendor/ffmpeg/bin/ffmpeg.
-# build.sh copies it into MeetingRecorder.app/Contents/Helpers/ffmpeg.
+# build.sh copies it into Meep.app/Contents/Helpers/ffmpeg.
 # Source: https://git.ffmpeg.org/ffmpeg.git (release tag, override with FFMPEG_REF)
 # Needs: Xcode Command Line Tools only (no nasm on arm64, no pkg-config, no external libraries).
 #
