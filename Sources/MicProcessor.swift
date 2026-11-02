@@ -49,8 +49,9 @@ enum MicProcessor {
                             progress: ((Double) -> Void)?) throws {
         let expected = max(1, Finalizer.duration(mic) * Double(rate))
         let refStream = try system.map(PCMStream.init(url:))
+        defer { refStream?.close() }
         let micStream = try PCMStream(url: mic)
-        defer { refStream?.close(); micStream.close() }
+        defer { micStream.close() }
 
         guard let apm = wrtc_apm_create(Int32(rate), refStream != nil ? 1 : 0,
                                         Int32(options.noiseSuppression.webrtcLevel), options.autoLevel ? 1 : 0) else {
@@ -95,6 +96,9 @@ enum MicProcessor {
             progress?(Double(total) / expected)
         }
         if total == 0 { throw CAError(what: "could not decode \(mic.lastPathComponent)", status: -1) }
+        // A decode error mid-file looks like the end of the stream: check how ffmpeg exited.
+        try micStream.checkExit(mic)
+        try refStream?.checkExit(system!)
     }
 }
 
@@ -104,17 +108,42 @@ final class PCMStream {
     private let handle: FileHandle
     private var pending = Data()
     private var eof = false
+    /// ffmpeg's error output, drained on another thread so it can't fill up and block ffmpeg.
+    /// Written before `errDone` is signalled, read only after waiting on it.
+    private final class ErrorOutput: @unchecked Sendable { var data = Data() }
+    private let errText = ErrorOutput()
+    private let errDone = DispatchSemaphore(value: 0)
 
     init(url: URL) throws {
         guard let ffmpeg = Mixer.ffmpegPath() else { throw CAError(what: Mixer.ffmpegMissing, status: -1) }
-        let pipe = Pipe()
+        let pipe = Pipe(), errPipe = Pipe()
         process.executableURL = URL(fileURLWithPath: ffmpeg)
-        process.arguments = ["-v", "error", "-i", url.path,
+        process.arguments = ["-nostdin", "-v", "error", "-i", url.path,
                              "-ac", "1", "-ar", String(MicProcessor.rate), "-f", "s16le", "-"]
         process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
+        process.standardError = errPipe
         try Subprocesses.run(process)
         handle = pipe.fileHandleForReading
+        let err = errText, done = errDone
+        DispatchQueue.global(qos: .utility).async {
+            err.data = errPipe.fileHandleForReading.readDataToEndOfFile()
+            done.signal()
+        }
+    }
+
+    /// After the stream was read to its end: throws if ffmpeg failed (e.g. a decode error part
+    /// way through, which otherwise just looks like a shorter file). A stream closed before its
+    /// end (the reference outlasting the mic) is not checked.
+    func checkExit(_ url: URL) throws {
+        guard eof else { return }
+        process.waitUntilExit()
+        errDone.wait()
+        errDone.signal()  // close() may wait too
+        guard process.terminationStatus != 0 else { return }
+        let text = String(decoding: errText.data, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        throw CAError(what: "ffmpeg could not decode all of \(url.lastPathComponent): \(text)",
+                      status: process.terminationStatus)
     }
 
     /// Fills up to `samples.count` samples; returns how many were read (0 = end).

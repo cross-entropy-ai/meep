@@ -60,7 +60,7 @@ enum CLI {
     /// `status [--json]`: always JSON (--json is accepted for symmetry with other commands).
     static func status(_ args: [String]) throws -> Exit {
         _ = try Args(args, flags: ["--json"])
-        print(StatusReport.json())
+        printJSON(StatusReport.report())
         return .ok
     }
 
@@ -217,6 +217,7 @@ enum CLI {
     // MARK: - Shared steps
 
     static func runAEC(system: URL, mic: URL, output: URL) throws {
+        try checkNotInput(output, [system, mic])
         defer { progressDone() }
         try MicProcessor.process(system: system, mic: mic, output: output, progress: progress("aec"))
     }
@@ -224,6 +225,7 @@ enum CLI {
     /// Mixes, then prints the output path (or with `json`, a JSON object) on stdout and the
     /// loudness/gain summary on stderr.
     static func runMix(system: URL?, mic: URL?, output: URL, json: Bool) throws -> Exit {
+        try checkNotInput(output, [system, mic])
         let r: Mixer.Result
         do {
             defer { progressDone() }
@@ -262,6 +264,18 @@ enum CLI {
             throw Failure(description: "none of \(names.joined(separator: ", ")) in \(dir.path)")
         }
         return u
+    }
+
+    /// Writing the output over an input would destroy it before it is read. Compared by file
+    /// identity, so case-insensitive spellings, symlinks and hard links are caught too.
+    static func checkNotInput(_ output: URL, _ inputs: [URL?]) throws(UsageError) {
+        func id(_ u: URL) -> NSObject? {
+            (try? u.resourceValues(forKeys: [.fileResourceIdentifierKey]))?.fileResourceIdentifier as? NSObject
+        }
+        guard let out = id(output) else { return }  // output doesn't exist yet
+        if inputs.compactMap({ $0 }).contains(where: { id($0).map { $0.isEqual(out) } ?? false }) {
+            throw UsageError(message: "output is also an input: \(output.path)")
+        }
     }
 
     static func checkExtension(_ url: URL, _ allowed: Set<String>) throws(UsageError) {

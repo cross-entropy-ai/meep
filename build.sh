@@ -28,7 +28,6 @@ for s in 16 32 128 256 512; do
 done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 
-mkdir -p build/obj
 clang++ -O2 -std=c++17 -target arm64-apple-macos15.0 -DWEBRTC_POSIX -DWEBRTC_MAC -DWEBRTC_LIBRARY_IMPL \
   -I "$WEBRTC/include" -c Native/webrtc_aec.cpp -o build/obj/webrtc_aec.o
 

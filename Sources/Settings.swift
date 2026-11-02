@@ -5,7 +5,8 @@ enum EchoMode: String, CaseIterable {
     case off, apple, webrtc
 }
 
-/// Mic noise suppression strength (WebRTC). Applied after recording, with echo cancellation.
+/// Mic noise suppression strength (WebRTC), applied after recording; skipped if Apple voice
+/// processing ran.
 enum NoiseSuppression: String, CaseIterable {
     case off, low, moderate, high
     case veryHigh = "very_high"
@@ -21,7 +22,8 @@ enum NoiseSuppression: String, CaseIterable {
     }
 }
 
-/// User settings (UserDefaults domain com.junyi.MeetingRecorder).
+/// User settings (UserDefaults domain com.junyi.MeetingRecorder). Most are written by
+/// Preferences through @AppStorage with the same key and default; see `help` for the keys.
 /// CLI: `defaults write com.junyi.MeetingRecorder echoCancellation -string off|apple|webrtc`
 enum AppSettings {
     private static var d: UserDefaults { .standard }
@@ -51,14 +53,12 @@ enum AppSettings {
     }
 
     static var echoMode: EchoMode {
-        get { d.string(forKey: "echoCancellation").flatMap(EchoMode.init(rawValue:)) ?? .webrtc }
-        set { d.set(newValue.rawValue, forKey: "echoCancellation") }
+        d.string(forKey: "echoCancellation").flatMap(EchoMode.init(rawValue:)) ?? .webrtc
     }
 
     /// Record the system audio track (everything the Mac plays). Default on. Off = mic only.
     static var recordSystemAudio: Bool {
-        get { d.object(forKey: "recordSystemAudio") as? Bool ?? true }
-        set { d.set(newValue, forKey: "recordSystemAudio") }
+        d.object(forKey: "recordSystemAudio") as? Bool ?? true
     }
 
     /// UID of the input device the mic track records; empty = the system default input.
@@ -74,47 +74,40 @@ enum AppSettings {
         set { d.set(newValue, forKey: "inputDeviceName") }
     }
 
-    /// Mic noise suppression (default low, what WebRTC echo cancellation always applied before).
+    /// Mic noise suppression (default low).
     static var noiseSuppression: NoiseSuppression {
-        get { d.string(forKey: "noiseSuppression").flatMap(NoiseSuppression.init(rawValue:)) ?? .low }
-        set { d.set(newValue.rawValue, forKey: "noiseSuppression") }
+        d.string(forKey: "noiseSuppression").flatMap(NoiseSuppression.init(rawValue:)) ?? .low
     }
 
     /// Even out the mic level over the recording (WebRTC AGC2). Default off.
     static var autoLevel: Bool {
-        get { d.bool(forKey: "autoLevel") }
-        set { d.set(newValue, forKey: "autoLevel") }
+        d.bool(forKey: "autoLevel")
     }
 
     /// Show the elapsed time next to the menu bar icon while recording (default on).
     static var showElapsedTime: Bool {
-        get { d.object(forKey: "showElapsedTime") as? Bool ?? true }
-        set { d.set(newValue, forKey: "showElapsedTime") }
+        d.object(forKey: "showElapsedTime") as? Bool ?? true
     }
 
     /// Show the menu bar icon while idle (default on). While recording it is always shown.
     static var showMenuBarIcon: Bool {
-        get { d.object(forKey: "showMenuBarIcon") as? Bool ?? true }
-        set { d.set(newValue, forKey: "showMenuBarIcon") }
+        d.object(forKey: "showMenuBarIcon") as? Bool ?? true
     }
 
     /// UI language (default: follow the system).
     static var language: AppLanguage {
-        get { d.string(forKey: "language").flatMap(AppLanguage.init(rawValue:)) ?? .system }
-        set { d.set(newValue.rawValue, forKey: "language") }
+        d.string(forKey: "language").flatMap(AppLanguage.init(rawValue:)) ?? .system
     }
 
     /// Shell command run after each recording is saved, with the recording folder as $1
     /// (also in $MEETINGRECORDER_DIR). Empty = none.
     static var afterSaveCommand: String {
-        get { d.string(forKey: "afterSaveCommand") ?? "" }
-        set { d.set(newValue, forKey: "afterSaveCommand") }
+        d.string(forKey: "afterSaveCommand") ?? ""
     }
 
     /// Reveal the recording in Finder once it has been saved (default on).
     static var openFolderAfterSaving: Bool {
-        get { d.object(forKey: "openFolderAfterSaving") as? Bool ?? true }
-        set { d.set(newValue, forKey: "openFolderAfterSaving") }
+        d.object(forKey: "openFolderAfterSaving") as? Bool ?? true
     }
 
     /// Skip the "track was silent the whole time" alert (set from the alert's "Don't show again").
@@ -140,7 +133,7 @@ enum AppSettings {
         }
     }
 
-    /// Launch at login via SMAppService (macOS 13+). Registers this app bundle's current location.
+    /// Launch at login via SMAppService. Registers this app bundle's current location.
     static var launchAtLogin: Bool {
         SMAppService.mainApp.status == .enabled
     }

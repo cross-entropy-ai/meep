@@ -1,10 +1,11 @@
 import Foundation
 
 /// Runs the user's "Run After Saving" command once a recording is finished.
-/// The command gets the recording folder as $1 and in $MEETINGRECORDER_DIR; it runs in a login
-/// shell (so PATH matches the user's terminal). Output goes to raw/after-save.log.
+/// The command gets the recording folder as $1 and in $MEETINGRECORDER_DIR; it runs via `zsh -lc`
+/// (reads ~/.zshenv and ~/.zprofile, not ~/.zshrc). Output goes to raw/after-save.log.
 /// Its state is recorded in session.json "after_save": {"command", "status": "running|done|failed",
-/// "started_at", "log", "pid"}, plus "exit_status" and "finished_at" once it ends.
+/// "started_at", "log", "pid"}, plus "exit_status" and "finished_at" once it ends, or "error" if it
+/// could not start.
 enum AfterSaveHook {
     static let logName = "after-save.log"
     private static let metaLock = NSLock()
@@ -25,6 +26,7 @@ enum AfterSaveHook {
         env["MEETINGRECORDER_DIR"] = dir.path
         p.environment = env
         p.currentDirectoryURL = dir
+        p.standardInput = FileHandle.nullDevice  // not the app's or a terminal's stdin
         p.standardOutput = out
         p.standardError = out
         p.terminationHandler = { proc in
@@ -75,17 +77,11 @@ enum AfterSaveHook {
 /// `MeetingRecorder status`: machine-readable state for agents, derived from the recordings
 /// on disk (no connection to the running app needed). `start/stop --wait` poll the same state.
 enum StatusReport {
-    static func json() -> String {
-        let data = (try? JSONSerialization.data(withJSONObject: report(), options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])) ?? Data()
-        return String(data: data, encoding: .utf8) ?? "{}"
-    }
-
     /// {"state": "idle|recording|saving", "current": {state, dir, started_at} | null,
     ///  "latest": {dir, mixed, status, started_at, duration_sec, after_save} | null, "recordings_folder"}
     static func report() -> [String: Any] {
         let root = RecordingSession.rootDirectory
         let dirs = ((try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? [])
-            .filter { Finalizer.readMeta($0) != nil }
             .sorted { $0.lastPathComponent > $1.lastPathComponent }  // names are timestamps
 
         var current: [String: Any]?
@@ -140,12 +136,15 @@ enum HelpText {
               exit 0 if its status is "complete" or "recovered", 1 otherwise (or if nothing was recording).
           \(exe) status [--json]
               JSON: {"state": "idle|recording|saving", "current": {...},
-                     "latest": {"dir", "mixed", "status", "after_save", ...}}
+                     "latest": {"dir", "mixed", "status", "after_save", ...}, "recordings_folder"}
+              status of a recording: recording | saving | complete | recovered | incomplete
+                (a track was lost or recorded nothing) | recovered_after_crash
           URL scheme: open "meetingrecorder://start" (also stop, preferences); returns at once
 
-        PROCESSING (inputs: any format ffmpeg decodes; output format follows the extension)
+        PROCESSING (inputs: .caf .wav .m4a .aac .mp3 .flac .ogg; output format follows the extension)
           \(exe) aec --system <file> --mic <file> -o <out.caf|.wav>
-              WebRTC echo cancellation: removes the system audio from the mic. 16-bit PCM.
+              WebRTC echo cancellation (removes the system audio from the mic), plus low noise
+              suppression and a high-pass filter; ignores Preferences. 16-bit PCM.
           \(exe) mix [--system <file>] [--mic <file>] -o <out.m4a|.wav|.caf> [--json]
               Loudness-matched mix: AAC (.m4a) or 16-bit PCM (.wav/.caf).
               Loudness and gains go to stderr, or with --json into a JSON object on stdout.
@@ -170,12 +169,24 @@ enum HelpText {
           All tracks start at the same moment: sample N of every file is the same instant.
           Folder: $MEETINGRECORDER_ROOT, else Preferences › General › Recordings Folder, i.e.
             defaults write com.junyi.MeetingRecorder recordingsFolder -string <path>
-          (the app reads the defaults key; the environment variable only affects this process).
+          (the app reads the defaults key; the environment variable only affects this process,
+          so with it set, --wait and status look in a different folder than the app records to).
 
         AFTER SAVING
           Preferences › Agent › Run After Saving: a shell command run after each recording is saved,
           with the recording folder as $1 and $MEETINGRECORDER_DIR. Output: raw/after-save.log.
           session.json "after_save": {"status": "running|done|failed", "exit_status", ...}.
+          Runs via zsh -lc: ~/.zprofile is read, ~/.zshrc is not (set PATH there or use full paths).
+
+        SETTINGS (defaults write com.junyi.MeetingRecorder <key> <value>; Preferences sets the same)
+          inputDeviceUID -string <uid>|""     microphone; "" = system default
+          recordSystemAudio -bool true|false   record what the Mac plays
+          echoCancellation -string webrtc|apple|off
+          noiseSuppression -string off|low|moderate|high|very_high
+          autoLevel -bool true|false
+          recordingsFolder -string <path>
+          afterSaveCommand -string <command>
+          openFolderAfterSaving -bool true|false
         """
     }
 }

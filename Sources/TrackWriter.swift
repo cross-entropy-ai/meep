@@ -16,7 +16,6 @@ import Foundation
 /// a restarted recorder starts only after the old one has drained). All file state lives on
 /// `queue`; the counters are read after finish(), which syncs with the queue.
 final class TrackWriter: @unchecked Sendable {
-    let url: URL
     let format: AVAudioFormat            // float32, non-interleaved, fixed rate/channels
     private var file: AVAudioFile?
     private let sessionStart: UInt64     // mach host time of session start
@@ -30,7 +29,6 @@ final class TrackWriter: @unchecked Sendable {
     private(set) var error: Error?
 
     init(url: URL, channels: AVAudioChannelCount, sessionStart: UInt64) throws {
-        self.url = url
         self.sessionStart = sessionStart
         format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48000,
                                channels: channels, interleaved: false)!

@@ -47,20 +47,19 @@ final class AppState {
     @ObservationIgnored private var activeObserver: Any?
 
     func refreshSources() {
-        defaultInputName = (try? defaultDevice(output: false)).flatMap { try? readStringProperty($0, kAudioObjectPropertyName) }
+        let defaultInput = try? defaultDevice(output: false)
+        defaultInputName = defaultInput.flatMap { try? readStringProperty($0, kAudioObjectPropertyName) }
         inputDevices = listInputDevices()
         micPermission = Permissions.microphone
         systemAudioPermission = Permissions.systemAudio
         let target = preferredInputDevice()
-        recordsDefaultInput = target == (try? defaultDevice(output: false))
+        recordsDefaultInput = target == defaultInput
         // Follow the device the mic track would record from now (selection, default, plug-in),
         // and stop if mic access was revoked.
         if meterWanted, meter?.device != target || (meter != nil && micPermission != .authorized) {
             startMeter()
         }
     }
-
-    // MARK: Input level meter
 
     // MARK: Recordings folder
 
@@ -81,6 +80,11 @@ final class AppState {
         panel.message = tr("Choose where to save recordings.")
         let apply: (NSApplication.ModalResponse) -> Void = { [weak self] response in
             guard let self, response == .OK, let url = panel.url else { return }
+            // A recording may have started while the panel was open; it must stay where it is.
+            guard !self.isRecording else {
+                self.recordingsFolderError = tr("Can't change while recording.")
+                return
+            }
             guard FileManager.default.isWritableFile(atPath: url.path) else {
                 self.recordingsFolderError = tr("Can't save to %@: no write permission.", abbreviate(url.path))
                 return
@@ -98,6 +102,8 @@ final class AppState {
 
     /// Which help popover is open (views keep no @State, see above); nil = none.
     var helpShown: String?
+
+    // MARK: Input level meter
 
     /// Displayed input level, 0...1 (-60...0 dBFS, falls back slowly).
     var inputLevel: Float = 0
@@ -548,7 +554,7 @@ struct AgentPreferencesView: View {
     var body: some View {
         Form {
             Section {
-                Text(tr("Agents and scripts can start and stop recording with the URLs below, check progress with --status, and read the results from the recordings folder: mixed.m4a, plus the separate tracks and session.json in raw/."))
+                Text(tr("Agents and scripts can start and stop recording with the URLs below, check progress with the status command, and read the results from the recordings folder: mixed.m4a, plus the separate tracks and session.json in raw/."))
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -679,6 +685,7 @@ private func abbreviate(_ path: String) -> String {
 final class PreferencesWindowController: NSWindowController {
     private var state: AppState?
     private var closeObserver: Any?
+    private var resignObserver: Any?
 
     enum Tab: Int, CaseIterable {
         case general, audio, agent, about
@@ -724,10 +731,20 @@ final class PreferencesWindowController: NSWindowController {
         window.isReleasedWhenClosed = false
         self.init(window: window)
         self.state = state
-        // The level meter keeps the mic open; never leave it running behind a closed window.
+        // The level meter keeps the mic open, and hotkey capture keeps the global hotkey off:
+        // end both when the window closes (SwiftUI's onDisappear does not fire for that).
         closeObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification, object: window, queue: .main
-        ) { _ in MainActor.assumeIsolated { state.stopMeter() } }
+        ) { _ in
+            MainActor.assumeIsolated {
+                state.stopMeter()
+                if state.isCapturingHotKey { state.endHotKeyCapture() }
+            }
+        }
+        // Capture also ends when the user switches to another app mid-way.
+        resignObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification, object: nil, queue: .main
+        ) { _ in MainActor.assumeIsolated { if state.isCapturingHotKey { state.endHotKeyCapture() } } }
         relabel()
     }
 

@@ -12,7 +12,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var session: RecordingSession?
     private var timer: Timer?
     private var starting = false
+    /// Capture is being stopped (brief); processing of stopped recordings is counted by `saving`.
     private var stopping = false
+    /// Stopped recordings still being processed (echo cancellation, mix, encoding).
+    private var saving = 0
+    /// Start (true) or stop (false) asked for while starting or stopping; applied when that ends,
+    /// so a quick `stop` + `start` from a script or the hotkey is not lost.
+    private var pendingRecording: Bool?
     /// Processing progress 0...1 (after Stop, or finishing an unfinished recording at launch).
     private var progress: Double?
     private var recoveringPrevious = false
@@ -108,7 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return dirs
             }.value
             recoveringPrevious = false
-            if !stopping { progress = nil }
+            if saving == 0 { progress = nil }
             updateUI()
             guard !dirs.isEmpty else { return }
             alert(tr("Finished unfinished recordings"),
@@ -126,7 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setProgress(_ f: Double, recovering: Bool) {
         if recovering {
             recoveringPrevious = true
-            if stopping { return }  // the current recording's progress wins
+            if saving > 0 { return }  // the current recording's progress wins
         }
         let old = progress.map { Int($0 * 100) }
         progress = f
@@ -138,15 +144,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func handleURL(_ event: NSAppleEventDescriptor, _ reply: NSAppleEventDescriptor) {
         guard let s = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
               let url = URL(string: s), let host = url.host else { return }
-        // URL scheme: meetingrecorder://start|stop|preferences[/general|/agent|/about]
+        // URL scheme: meetingrecorder://start|stop|preferences[/general|/audio|/agent|/about]
         let command = host + url.path
         if launched { run(command: command) } else { pendingCommand = command }
     }
 
     private func run(command host: String) {
         switch host {
-        case "start": if session == nil { toggle() }
-        case "stop": if session != nil { toggle() }
+        case "start": request(recording: true)
+        case "stop": request(recording: false)
         case "preferences": preferences.show()
         case "preferences/general": preferences.show(tab: .general)
         case "preferences/audio": preferences.show(tab: .audio)
@@ -157,53 +163,91 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggle() {
-        if starting || stopping { return }
-        if let s = session { stop(s) } else { start() }
+        // While busy, toggle relative to where the current start/stop (or a pending one) ends up.
+        let expected = pendingRecording ?? (starting || (session != nil && !stopping))
+        request(recording: !expected)
+    }
+
+    private func request(recording want: Bool) {
+        if starting || stopping {
+            pendingRecording = want
+            return
+        }
+        pendingRecording = nil  // acting now supersedes anything queued
+        if want, session == nil { start() } else if !want, let s = session { stop(s) }
+    }
+
+    private func applyPendingRequest() {
+        guard let want = pendingRecording else { return }
+        pendingRecording = nil
+        request(recording: want)
     }
 
     private func start() {
-        starting = true  // the permission prompt can take a while; ignore toggles until it is done
+        starting = true  // the permission prompt can take a while
         Task {
-            defer { starting = false }
-            if !(await micPermission()) {
+            let micAllowed = await micPermission()
+            var failure: String?
+            if !micAllowed && !AppSettings.recordSystemAudio {
+                failure = tr("No microphone access, and system audio recording is off: there is nothing to record.")
+            } else {
+                do {
+                    let s = try RecordingSession()
+                    try s.start()
+                    session = s
+                    startTimer()
+                } catch {
+                    failure = "\(error)"
+                }
+            }
+            starting = false
+            updateUI()
+            // A stop asked for meanwhile runs now, before the alerts below (which block).
+            applyPendingRequest()
+            // Alerts only after capture is running (or has failed): they block until dismissed.
+            if let failure {
+                alert(tr("Can't start recording"), failure,
+                      settingsURL: micAllowed ? nil : Permissions.microphoneSettingsURL.absoluteString)
+            } else if !micAllowed {
                 alert(tr("No microphone access"),
                       tr("Allow MeetingRecorder in System Settings › Privacy & Security › Microphone. This recording captures system audio only."),
-                      settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+                      settingsURL: Permissions.microphoneSettingsURL.absoluteString)
             }
-            do {
-                let s = try RecordingSession()
-                try s.start()
-                session = s
-                startTimer()
-            } catch {
-                alert(tr("Can't start recording"), "\(error)")
-            }
-            updateUI()
         }
     }
 
     /// Ticks the elapsed time in the menu bar once a second.
     private func startTimer() {
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.updateUI() }  // scheduled on the main run loop
+        let t = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateUI() }  // runs on the main run loop
         }
+        RunLoop.main.add(t, forMode: .common)  // keeps ticking while the menu or an alert is open
+        timer = t
     }
 
     private func stop(_ s: RecordingSession) {
         stopping = true
-        progress = 0
         timer?.invalidate(); timer = nil
         updateUI()
         let report = progressReporter(recovering: false)
         Task {
+            // 1. Stop capture (fast). From here a new recording can start, e.g. the next meeting
+            //    right away, while this one is processed.
+            await Task.detached(priority: .userInitiated) { s.stopCapture() }.value
+            session = nil
+            stopping = false
+            saving += 1
+            progress = 0
+            updateUI()
+            applyPendingRequest()
+            // 2. Process: echo cancellation, mix, encoding. Minutes for a long meeting.
             let warnings = await Task.detached(priority: .userInitiated) {
-                let warnings = s.stop(progress: report)
+                let warnings = s.process(progress: report)
                 AfterSaveHook.run(s.directory)
                 return warnings
             }.value
-            session = nil
-            stopping = false
-            progress = nil
+            saving -= 1
+            if saving == 0 { progress = nil }
             updateUI()
             // Silence warnings can be muted; real failures (write errors, lost tracks) always show.
             let shown = AppSettings.hideSilenceWarnings
@@ -211,7 +255,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if !shown.isEmpty {
                 let canSuppress = shown.contains { s.silenceWarnings.contains($0) }
                 let suppressed = alert(tr("Recording saved with warnings"), shown.joined(separator: "\n\n"),
-                                       settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture",
+                                       settingsURL: Permissions.systemAudioSettingsURL.absoluteString,
                                        suppressible: canSuppress)
                 if suppressed { AppSettings.hideSilenceWarnings = true }
             }
@@ -226,7 +270,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateUI() {
         guard let button = statusItem?.button else { return }
-        let recording = session != nil || stopping || recoveringPrevious
+        let recording = session != nil || stopping || saving > 0 || recoveringPrevious
         if appState.isRecording != recording { appState.isRecording = recording }
         // Hidden while idle if the user turned the icon off; always shown while recording/saving.
         statusItem.isVisible = AppSettings.showMenuBarIcon || recording
@@ -249,8 +293,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             icon = MenuBarIcons.saving
             toggleItem.title = tr("Saving… %@", percent)
             toggleItem.isEnabled = false
-            label = percent
-            button.toolTip = "MeetingRecorder: " + tr("saving") + " \(percent)"
+            button.toolTip = "MeetingRecorder: " + tr("saving")
         } else if let s = session {
             let elapsed = RecordingSession.clock(Date().timeIntervalSince(s.startedAt))
             toggleItem.title = tr("Stop Recording (%@)", elapsed)
@@ -276,14 +319,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             toggleItem.title = tr("Start Recording")
             toggleItem.isEnabled = true
             button.toolTip = "MeetingRecorder"
-            if recoveringPrevious {
+            if saving > 0 {
+                icon = MenuBarIcons.saving
+                label = percent
+                healthItem.title = tr("Saving… %@", percent)
+                healthItem.isHidden = false
+                button.toolTip = "MeetingRecorder: " + tr("saving") + " \(percent)"
+            } else if recoveringPrevious {
                 icon = MenuBarIcons.saving
                 label = percent
                 healthItem.title = tr("Finishing an unfinished recording… %@", percent)
                 healthItem.isHidden = false
             }
         }
-        if let p = progress, stopping || (session == nil && recoveringPrevious) {
+        if let p = progress, session == nil, saving > 0 || recoveringPrevious {
             progressBar.doubleValue = p
             progressItem.isHidden = false
         }
@@ -293,15 +342,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.attributedTitle = NSAttributedString(string: label.isEmpty ? "" : " " + label, attributes: [
             .font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
         ])
-        if icon == nil { button.title = stopping ? "⏳" : (session != nil ? "🔴 " + label : "🎙") }  // assets missing
+        if icon == nil { button.title = session != nil ? "🔴 " + label : (stopping || saving > 0 ? "⏳" : "🎙") }  // assets missing
     }
 
     /// Asks for microphone access the first time; afterwards returns the stored decision.
     private func micPermission() async -> Bool {
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
-        case .authorized: true
-        case .notDetermined: await AVCaptureDevice.requestAccess(for: .audio)
-        default: false
+        switch Permissions.microphone {
+        case .authorized: return true
+        case .notDetermined:
+            let granted = await Permissions.requestMicrophone()
+            appState.refreshSources()  // Preferences shows the new status
+            return granted
+        default: return false
         }
     }
 

@@ -41,7 +41,7 @@
     <string></string>
     <key>MRTermsOfUseURL</key>
     <string></string>
-    <!-- "owner/repo": Check Update compares CFBundleShortVersionString with its latest GitHub release -->
+    <!-- "owner/repo": Check for Updates compares CFBundleShortVersionString with its latest GitHub release -->
     <key>MRUpdateGitHubRepo</key>
     <string></string>
     <key>LSUIElement</key>

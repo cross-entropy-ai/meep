@@ -56,7 +56,7 @@
 "Open Folder After Saving" = "儲存後打開資料夾";
 "Show in Finder" = "在 Finder 中顯示";
 "Recordings Folder" = "錄音儲存位置";
-"Agents and scripts can start and stop recording with the URLs below, check progress with --status, and read the results from the recordings folder: mixed.m4a, plus the separate tracks and session.json in raw/." = "Agent 和腳本可以用下面的 URL 開始、停止錄製，用 --status 查詢進度，再從錄音資料夾讀取結果：mixed.m4a，以及 raw/ 裡的分軌和 session.json。";
+"Agents and scripts can start and stop recording with the URLs below, check progress with the status command, and read the results from the recordings folder: mixed.m4a, plus the separate tracks and session.json in raw/." = "Agent 和腳本可以用下面的 URL 開始、停止錄製，用 status 查詢進度，再從錄音資料夾讀取結果：mixed.m4a，以及 raw/ 裡的分軌和 session.json。";
 "Command Line" = "命令列";
 "Run After Saving" = "儲存後執行";
 "A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEETINGRECORDER_DIR. Output goes to raw/after-save.log." = "每次錄音儲存後執行的 shell 命令。錄音資料夾作為 $1 傳入，也在 $MEETINGRECORDER_DIR 裡。輸出寫入 raw/after-save.log。";
@@ -76,7 +76,6 @@
 "Apple Voice Processing" = "Apple 語音處理";
 "Microphone" = "麥克風";
 "System Audio" = "系統聲音";
-"No input device" = "沒有輸入裝置";
 "Allowed" = "已允許";
 "Not Allowed" = "未允許";
 "Allow Access" = "允許取用";
@@ -111,3 +110,6 @@
 "Choose where to save recordings." = "選擇錄音的儲存位置。";
 "Can't save to %@: no write permission." = "無法儲存到 %@：沒有寫入權限。";
 "Set by MEETINGRECORDER_ROOT." = "由 MEETINGRECORDER_ROOT 指定。";
+"The microphone recorded nothing. Check the input device." = "麥克風什麼也沒錄到，請檢查輸入裝置。";
+"System audio recorded nothing." = "系統聲音什麼也沒錄到。";
+"No microphone access, and system audio recording is off: there is nothing to record." = "沒有麥克風權限，系統聲音錄製也已關閉：沒有可錄製的內容。";

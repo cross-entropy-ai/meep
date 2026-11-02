@@ -30,8 +30,9 @@ final class MicRecorder: @unchecked Sendable {
     private var deviceFormat: AVAudioFormat?
     private var formatListener: AudioObjectPropertyListenerBlock?
     private let ioQueue = DispatchQueue(label: "mic-io", qos: .userInteractive)
-    /// Whether the engine was set up (device mode never touches it).
-    private var usesEngine = false
+    /// Whether the engine was set up (device mode never touches it). The engine records the
+    /// system default input, whatever it is at the moment.
+    private(set) var usesEngine = false
 
     init(voiceProcessing: Bool) {
         self.voiceProcessing = voiceProcessing

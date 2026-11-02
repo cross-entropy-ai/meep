@@ -4,7 +4,7 @@
 # Source: https://git.ffmpeg.org/ffmpeg.git (release tag, override with FFMPEG_REF)
 # Needs: Xcode Command Line Tools only (no nasm on arm64, no pkg-config, no external libraries).
 #
-# Only what the app runs (Sources/Mixer.swift, Sources/EchoCanceller.swift) plus common audio inputs:
+# Only what the app runs (Sources/Mixer.swift, Sources/MicProcessor.swift) plus common audio inputs:
 #   ffmpeg [-progress pipe:1] -i <x.caf|m4a|wav|mp3|flac|ogg> \
 #       -af aformat=…,ebur128=… -f null -                      # loudness
 #       -filter_complex …aformat,volume,amix,alimiter… -ar 48000 -ac 1 -c:a aac out.m4a   # mix

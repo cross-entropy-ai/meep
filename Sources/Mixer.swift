@@ -2,7 +2,8 @@ import Foundation
 import Synchronization
 
 /// Mixes system + mic tracks into one mono file with ffmpeg: AAC 96 kbps (.m4a), or 16-bit PCM
-/// if the output ends in .wav or .caf. Inputs: anything ffmpeg can decode.
+/// if the output ends in .wav or .caf. Inputs: what the bundled ffmpeg decodes (see
+/// scripts/build-ffmpeg.sh).
 /// Each track is first brought to the same loudness with a static gain, because the system
 /// track is a full-scale digital signal while the mic picks up much quieter acoustic sound.
 enum Mixer {
@@ -29,7 +30,6 @@ enum Mixer {
     static let ffmpegMissing = "ffmpeg not found (MeetingRecorder.app/Contents/Helpers/ffmpeg, "
         + "or $MEETINGRECORDER_FFMPEG); rebuild the app with ./build.sh"
 
-    @discardableResult
     static func mix(system: URL?, mic: URL?, output: URL, progress: ((Double) -> Void)? = nil) throws -> Result {
         var result = Result()
         var args = ["-y", "-hide_banner", "-loglevel", "error"]
@@ -63,10 +63,10 @@ enum Mixer {
     }
 
     /// Integrated loudness (EBU R128, LUFS) of a file, mono-folded.
-    static func loudness(of url: URL, progress: ((Double) -> Void)? = nil) throws -> Double {
+    private static func loudness(of url: URL, progress: @escaping (Double) -> Void) throws -> Double {
         let err = try runFFmpeg(["-hide_banner", "-nostats", "-i", url.path,
                                  "-af", "aformat=channel_layouts=mono,ebur128=framelog=quiet", "-f", "null", "-"],
-                                duration: progress == nil ? 0 : Finalizer.duration(url), progress: progress)
+                                duration: Finalizer.duration(url), progress: progress)
         // Summary block: "Integrated loudness:\n    I:         -14.2 LUFS"
         guard let summary = err.range(of: "Integrated loudness:"),
               let line = err[summary.upperBound...].split(separator: "\n").first(where: { $0.contains("I:") }),
@@ -81,15 +81,15 @@ enum Mixer {
 
     /// Runs ffmpeg, returns stderr; throws on non-zero exit. With `progress` and the input
     /// `duration` (s), reports 0...1 from ffmpeg's `-progress` output (out_time_us).
-    private static func runFFmpeg(_ args: [String], duration: Double = 0,
-                                  progress: ((Double) -> Void)? = nil) throws -> String {
+    private static func runFFmpeg(_ args: [String], duration: Double,
+                                  progress: ((Double) -> Void)?) throws -> String {
         guard let ffmpeg = ffmpegPath() else {
             throw CAError(what: ffmpegMissing, status: -1)
         }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: ffmpeg)
         let track = progress != nil && duration > 0
-        p.arguments = track ? ["-progress", "pipe:1"] + args : args
+        p.arguments = ["-nostdin"] + (track ? ["-progress", "pipe:1"] : []) + args
         let errPipe = Pipe(), outPipe = Pipe()
         p.standardError = errPipe
         p.standardOutput = track ? outPipe : FileHandle.nullDevice

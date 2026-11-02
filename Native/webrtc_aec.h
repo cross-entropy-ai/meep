@@ -1,4 +1,5 @@
-// Minimal C API over WebRTC AudioProcessing (AEC3, noise suppression, AGC2), callable from Swift.
+// Minimal C API over WebRTC AudioProcessing (AEC3, noise suppression, AGC2, high-pass filter),
+// callable from Swift.
 #pragma once
 #include <stdint.h>
 #ifdef __cplusplus

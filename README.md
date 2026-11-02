@@ -66,7 +66,7 @@ Results (a folder or file path, or JSON) go to stdout; messages and progress go 
 Exit codes: `0` ok, `1` failed, `2` bad usage, `3` timed out. `$mr help` lists everything.
 `open "meetingrecorder://start"` and `…://stop` work too, without waiting.
 
-**Run After Saving** (Preferences › Agent) runs a command of your choice after each recording, e.g. a transcription script, with the recording folder as `$1`. Its progress and exit status appear in `raw/session.json` under `after_save`.
+**Run After Saving** (Preferences › Agent) runs a command of your choice after each recording, e.g. a transcription script, with the recording folder as `$1`. It runs via `zsh -lc`, which reads `~/.zprofile` but not `~/.zshrc`, so set `PATH` there or use full paths. Its progress and exit status appear in `raw/session.json` under `after_save`.
 
 To save recordings somewhere else, use Preferences › General › Recordings Folder › Change…, or:
 

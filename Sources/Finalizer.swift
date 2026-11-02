@@ -79,7 +79,8 @@ enum Finalizer {
         }
         progress?(0)
 
-        // 1. Echo cancellation on the lossless capture, to lossless PCM.
+        // 1. Mic processing (echo cancellation / noise suppression / auto level as set), on the
+        //    lossless capture, to lossless PCM.
         var aec = processing?["aec"] as? Bool ?? false
         if runAEC {
             do {
@@ -277,7 +278,10 @@ enum Subprocesses {
     /// Set once the app is quitting: processing must not delete or finalize anything after that.
     static var isQuitting: Bool { state.withLock { $0.quitting } }
 
+    /// Starts `p` with stdin = /dev/null: inheriting a terminal's stdin (Process's default) lets
+    /// ffmpeg read keys (q quits early) and suspends a backgrounded CLI on SIGTTIN.
     static func run(_ p: Process) throws {
+        p.standardInput = FileHandle.nullDevice
         try state.withLock { s in
             if s.quitting { throw CAError(what: "app is quitting", status: -1) }
             try p.run()

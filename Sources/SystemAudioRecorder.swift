@@ -4,7 +4,7 @@ import Foundation
 import Synchronization
 
 /// One capture lifecycle of everything the Mac plays (all processes), via a Core Audio process
-/// tap (macOS 14.2+) on a private aggregate device built on the current default output device.
+/// tap on a private aggregate device built on the current default output device.
 /// Requires the "System Audio Recording Only" permission (NSAudioCaptureUsageDescription).
 /// Recovery = stop() this instance and start a new one; the TrackWriter keeps the file continuous.
 /// Concurrency: start/stop run on the session's control queue; `format` is set before the IO proc

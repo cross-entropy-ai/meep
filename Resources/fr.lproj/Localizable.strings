@@ -56,7 +56,7 @@
 "Open Folder After Saving" = "Ouvrir le dossier après l'enregistrement";
 "Show in Finder" = "Afficher dans le Finder";
 "Recordings Folder" = "Dossier des enregistrements";
-"Agents and scripts can start and stop recording with the URLs below, check progress with --status, and read the results from the recordings folder: mixed.m4a, plus the separate tracks and session.json in raw/." = "Les agents et les scripts peuvent démarrer et arrêter l'enregistrement avec les URL ci-dessous, suivre la progression avec --status et lire les résultats dans le dossier des enregistrements : mixed.m4a, ainsi que les pistes séparées et session.json dans raw/.";
+"Agents and scripts can start and stop recording with the URLs below, check progress with the status command, and read the results from the recordings folder: mixed.m4a, plus the separate tracks and session.json in raw/." = "Les agents et les scripts peuvent démarrer et arrêter l'enregistrement avec les URL ci-dessous, suivre la progression avec status et lire les résultats dans le dossier des enregistrements : mixed.m4a, ainsi que les pistes séparées et session.json dans raw/.";
 "Command Line" = "Ligne de commande";
 "Run After Saving" = "Exécuter après l'enregistrement";
 "A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEETINGRECORDER_DIR. Output goes to raw/after-save.log." = "Une commande shell exécutée après chaque enregistrement. Elle reçoit le dossier de l'enregistrement en $1 et dans $MEETINGRECORDER_DIR. La sortie est écrite dans raw/after-save.log.";
@@ -76,7 +76,6 @@
 "Apple Voice Processing" = "Traitement vocal Apple";
 "Microphone" = "Micro";
 "System Audio" = "Audio du système";
-"No input device" = "Aucun périphérique d'entrée";
 "Allowed" = "Autorisé";
 "Not Allowed" = "Non autorisé";
 "Allow Access" = "Autoriser l'accès";
@@ -111,3 +110,6 @@
 "Choose where to save recordings." = "Choisissez où enregistrer les enregistrements.";
 "Can't save to %@: no write permission." = "Impossible d’enregistrer dans %@ : pas d’autorisation d’écriture.";
 "Set by MEETINGRECORDER_ROOT." = "Défini par MEETINGRECORDER_ROOT.";
+"The microphone recorded nothing. Check the input device." = "Le micro n’a rien enregistré. Vérifiez le périphérique d’entrée.";
+"System audio recorded nothing." = "L’audio du système n’a rien enregistré.";
+"No microphone access, and system audio recording is off: there is nothing to record." = "Pas d’accès au micro et l’enregistrement de l’audio du système est désactivé : rien à enregistrer.";
