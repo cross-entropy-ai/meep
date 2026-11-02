@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Command-line interface (usage: HelpText in Agent.swift).
 /// stdout carries only results (a path, or JSON); diagnostics and progress go to stderr.
@@ -23,7 +24,7 @@ enum CLI {
 
     /// Runs the command in `args` (non-empty) and exits. `cmd` and `--cmd` are the same command.
     static func main(_ args: [String]) -> Never {
-        let name = args[0] == "-h" ? "help" : (args[0].hasPrefix("--") ? String(args[0].dropFirst(2)) : args[0])
+        let name = if args[0] == "-h" { "help" } else if args[0].hasPrefix("--") { String(args[0].dropFirst(2)) } else { args[0] }
         let rest = Array(args.dropFirst())
         do {
             let code: Exit
@@ -124,7 +125,7 @@ enum CLI {
     }
 
     /// `--wait` and `--timeout <sec>` (positive number).
-    private static func waitOptions(_ args: [String], defaultTimeout: Double) throws -> (Bool, Double) {
+    private static func waitOptions(_ args: [String], defaultTimeout: Double) throws(UsageError) -> (Bool, Double) {
         let a = try Args(args, options: ["--timeout"], flags: ["--wait"])
         var timeout = defaultTimeout
         if let t = a["--timeout"] {
@@ -262,7 +263,7 @@ enum CLI {
         return u
     }
 
-    static func checkExtension(_ url: URL, _ allowed: Set<String>) throws {
+    static func checkExtension(_ url: URL, _ allowed: Set<String>) throws(UsageError) {
         guard allowed.contains(url.pathExtension.lowercased()) else {
             throw UsageError(message: "output must end in " + allowed.sorted().map { "." + $0 }.joined(separator: ", ")
                              + ": \(url.lastPathComponent)")
@@ -280,28 +281,28 @@ enum CLI {
         print(String(data: data, encoding: .utf8) ?? "{}")
     }
 
-    private static let progressLock = NSLock()
-    private static var progressShown = false
+    /// The progress line currently on stderr (nil = none). Progress can come from any thread.
+    private static let progressLine = OSAllocatedUnfairLock<String?>(initialState: nil)
 
     /// "label 42%" on stderr, redrawn in place; only when stderr is a terminal.
-    static func progress(_ label: String) -> (Double) -> Void {
+    static func progress(_ label: String) -> @Sendable (Double) -> Void {
         guard isatty(STDERR_FILENO) != 0 else { return { _ in } }
-        var last = -1
         return { f in
-            CLI.progressLock.lock(); defer { CLI.progressLock.unlock() }
-            let p = Int(min(max(f, 0), 1) * 100)
-            guard p != last else { return }
-            last = p
-            CLI.progressShown = true
-            CLI.printErr("\r\u{1B}[K\(label) \(p)%", newline: false)
+            let line = "\(label) \(Int(min(max(f, 0), 1) * 100))%"
+            CLI.progressLine.withLock { shown in
+                guard shown != line else { return }
+                shown = line
+                CLI.printErr("\r\u{1B}[K" + line, newline: false)
+            }
         }
     }
 
     /// Clears the progress line.
     static func progressDone() {
-        progressLock.lock(); defer { progressLock.unlock() }
-        if progressShown { printErr("\r\u{1B}[K", newline: false) }
-        progressShown = false
+        progressLine.withLock { shown in
+            if shown != nil { CLI.printErr("\r\u{1B}[K", newline: false) }
+            shown = nil
+        }
     }
 }
 
@@ -313,7 +314,7 @@ struct Args {
     private(set) var positional: [String] = []
 
     init(_ args: [String], options: Set<String> = [], flags flagNames: Set<String> = [],
-         count: ClosedRange<Int> = 0...0) throws {
+         count: ClosedRange<Int> = 0...0) throws(CLI.UsageError) {
         func usage(_ m: String) -> CLI.UsageError { CLI.UsageError(message: m) }
         var i = 0
         var optionsEnded = false
