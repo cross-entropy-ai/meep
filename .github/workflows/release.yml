@@ -1,0 +1,94 @@
+name: Release
+
+# Push a tag vX.Y.Z (matching CFBundleShortVersionString) to build, sign, notarize and publish
+# a GitHub release with the zip, the Homebrew cask (meep.rb) and checksums.txt.
+# The tag message is the release: first line the title, the rest the notes. cross-entropy-ai/homebrew-tap picks up meep.rb.
+# Run manually to build and notarize without publishing (the files are kept as an artifact).
+#
+# Secrets: DEVELOPER_ID_P12 (base64 of the "Developer ID Application" identity exported as .p12),
+#          DEVELOPER_ID_P12_PASSWORD, NOTARY_APPLE_ID, NOTARY_PASSWORD (app-specific password).
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      KEYCHAIN: ${{ runner.temp }}/signing.keychain-db
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check the tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Info.plist)
+          [ "${GITHUB_REF_NAME}" = "v$version" ] || { echo "::error::tag $GITHUB_REF_NAME, Info.plist $version"; exit 1; }
+
+      - name: Toolchain
+        run: |
+          brew install meson ninja
+          swiftc --version
+
+      # WebRTC and ffmpeg take a while to build; rebuilt only when their scripts change.
+      - uses: actions/cache@v4
+        with:
+          path: vendor
+          key: vendor-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-webrtc.sh', 'scripts/build-ffmpeg.sh') }}
+
+      - name: Import the signing identity
+        env:
+          P12: ${{ secrets.DEVELOPER_ID_P12 }}
+          P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          pw=$(uuidgen)
+          security create-keychain -p "$pw" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$pw" "$KEYCHAIN"
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/id.p12"
+          security import "$RUNNER_TEMP/id.p12" -k "$KEYCHAIN" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/id.p12"
+          # Intermediate certificate, in case the runner image lacks it.
+          curl -fsSL https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer -o "$RUNNER_TEMP/g2.cer"
+          security import "$RUNNER_TEMP/g2.cer" -k "$KEYCHAIN" || true
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$pw" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
+      - name: Build, sign and notarize
+        env:
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          NOTARY_TEAM_ID: P9772KLZBG
+        run: scripts/release.sh build/release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meep-release
+          path: build/release/*
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The annotated tag's message without its signature: the first line is the title.
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          git tag -l --format='%(contents:body)' "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" build/release/* \
+            --title "$(git tag -l --format='%(contents:subject)' "$GITHUB_REF_NAME")" \
+            --notes-file "$RUNNER_TEMP/notes.md" --verify-tag
+
+      - name: Remove the signing keychain
+        if: always()
+        run: security delete-keychain "$KEYCHAIN" || true
