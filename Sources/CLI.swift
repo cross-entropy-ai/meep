@@ -34,6 +34,8 @@ enum CLI {
             case "aec": code = try aec(rest)
             case "remix": code = try remix(rest)
             case "mix": code = try mix(rest)
+            case "start": code = try start(rest)
+            case "stop": code = try stop(rest)
             default: throw UsageError(message: "unknown command: \(args[0])")
             }
             exit(code.rawValue)
@@ -70,6 +72,80 @@ enum CLI {
         if value != "status" { try AppSettings.setLaunchAtLogin(value == "on") }
         print("launch at login: \(AppSettings.launchAtLogin ? "on" : "off")")
         return .ok
+    }
+
+    /// `start [--wait] [--timeout <sec>]`: asks the app to start recording. With --wait, returns
+    /// once a recording is live and prints its folder (exit 3 on timeout).
+    static func start(_ args: [String]) throws -> Exit {
+        let (wait, timeout) = try waitOptions(args, defaultTimeout: 15)
+        try send("start")
+        guard wait else { return .ok }
+        let deadline = Date().addingTimeInterval(timeout)
+        while true {
+            if let c = StatusReport.current, c.state == "recording" {
+                print(c.dir.path)
+                return .ok
+            }
+            if Date() >= deadline {
+                printErr("timed out after \(String(format: "%g", timeout)) s: no recording started")
+                return .timeout
+            }
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+    }
+
+    /// `stop [--wait] [--timeout <sec>]`: asks the app to stop recording. With --wait, returns once
+    /// the recording is saved and prints its folder: exit 0 if its status is "complete", 1 for any
+    /// other status (or if nothing was recording), 3 on timeout.
+    static func stop(_ args: [String]) throws -> Exit {
+        let (wait, timeout) = try waitOptions(args, defaultTimeout: 600)
+        let dir = StatusReport.current?.dir  // the recording this stop is about
+        try send("stop")
+        guard wait else { return .ok }
+        guard let dir else {
+            printErr("not recording")
+            return .failed
+        }
+        let deadline = Date().addingTimeInterval(timeout)
+        while true {
+            let status = Finalizer.readMeta(dir)?["status"] as? String ?? ""
+            if !["", "recording", "saving"].contains(status) {
+                print(dir.path)
+                if status == "complete" { return .ok }
+                printErr("recording saved with status \(status) (see \(Finalizer.rawFolder)/session.json)")
+                return .failed
+            }
+            if Date() >= deadline {
+                printErr("timed out after \(String(format: "%g", timeout)) s: \(dir.path) is not saved yet (status \(status))")
+                return .timeout
+            }
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+    }
+
+    /// `--wait` and `--timeout <sec>` (positive number).
+    private static func waitOptions(_ args: [String], defaultTimeout: Double) throws -> (Bool, Double) {
+        let a = try Args(args, options: ["--timeout"], flags: ["--wait"])
+        var timeout = defaultTimeout
+        if let t = a["--timeout"] {
+            guard let v = Double(t), v > 0 else { throw UsageError(message: "--timeout needs a positive number of seconds, not \(t)") }
+            timeout = v
+        }
+        return (a.has("--wait"), timeout)
+    }
+
+    /// Sends meetingrecorder://<command> through LaunchServices (`open -g`), which launches the
+    /// app in the background if it is not running.
+    static func send(_ command: String) throws {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        p.arguments = ["-g", "meetingrecorder://\(command)"]
+        p.standardOutput = FileHandle.standardError  // keep stdout for results
+        try p.run()
+        p.waitUntilExit()
+        guard p.terminationStatus == 0 else {
+            throw Failure(description: "could not open meetingrecorder://\(command) (is MeetingRecorder installed?)")
+        }
     }
 
     /// `aec --system <file> --mic <file> -o <out.caf|.wav>`: removes the system audio's echo from

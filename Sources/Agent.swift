@@ -72,10 +72,17 @@ enum AfterSaveHook {
     }
 }
 
-/// `MeetingRecorder --status`: machine-readable state for agents, derived from the recordings
-/// on disk (no connection to the running app needed).
+/// `MeetingRecorder status`: machine-readable state for agents, derived from the recordings
+/// on disk (no connection to the running app needed). `start/stop --wait` poll the same state.
 enum StatusReport {
     static func json() -> String {
+        let data = (try? JSONSerialization.data(withJSONObject: report(), options: [.prettyPrinted, .sortedKeys])) ?? Data()
+        return String(data: data, encoding: .utf8) ?? "{}"
+    }
+
+    /// {"state": "idle|recording|saving", "current": {state, dir, started_at} | null,
+    ///  "latest": {dir, mixed, status, started_at, duration_sec, after_save} | null, "recordings_folder"}
+    static func report() -> [String: Any] {
         let root = RecordingSession.rootDirectory
         let dirs = ((try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? [])
             .filter { Finalizer.readMeta($0) != nil }
@@ -102,14 +109,19 @@ enum StatusReport {
             }
             if current != nil && latest != nil { break }
         }
-        let report: [String: Any] = [
+        return [
             "state": current?["state"] ?? "idle",
             "current": current ?? NSNull(),
             "latest": latest ?? NSNull(),
             "recordings_folder": root.path,
         ]
-        let data = (try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys])) ?? Data()
-        return String(data: data, encoding: .utf8) ?? "{}"
+    }
+
+    /// The live recording (state "recording" or "saving"), if any.
+    static var current: (state: String, dir: URL)? {
+        guard let c = report()["current"] as? [String: Any], let state = c["state"] as? String,
+              let dir = c["dir"] as? String else { return nil }
+        return (state, URL(fileURLWithPath: dir, isDirectory: true))
     }
 }
 
