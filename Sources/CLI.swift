@@ -17,13 +17,16 @@ enum CLI {
     /// arguments macOS and Cocoa add at launch (-psn_0_1234, -NSDocumentRevisionsDebugMode YES,
     /// -AppleLanguages …), mean: launch the GUI. Anything else (also `-help`) is the CLI, which
     /// reports what it doesn't know instead of silently opening the app.
+    /// Exception: no arguments typed in a terminal (stdin is a tty; LaunchServices gives the app
+    /// /dev/null) is the CLI too, which opens the app the way the Dock does (`openApp`).
     static func isInvocation(_ args: [String]) -> Bool {
-        guard let first = args.first else { return false }
+        guard let first = args.first else { return isatty(STDIN_FILENO) != 0 }
         return !["-psn_", "-NS", "-Apple"].contains { first.hasPrefix($0) }
     }
 
     /// Runs the command in `args` (non-empty) and exits. `cmd` and `--cmd` are the same command.
     static func main(_ args: [String]) -> Never {
+        if args.isEmpty { exit(openApp()) }
         let name = if args[0] == "-h" { "help" } else if args[0].hasPrefix("--") { String(args[0].dropFirst(2)) } else { args[0] }
         let rest = Array(args.dropFirst())
         do {
@@ -168,6 +171,18 @@ enum CLI {
             throw UsageError(message: "MEEP_ROOT (\(mine)) differs from the app's recordings folder (\(app)); "
                              + "unset it, or set the folder with defaults write com.junyi.Meep recordingsFolder")
         }
+    }
+
+    /// `meep` alone: opens this Meep.app through LaunchServices, which shows the running
+    /// instance's Preferences instead of starting a second one, and returns at once.
+    static func openApp() -> Int32 {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        p.arguments = [Bundle.main.bundlePath]
+        p.standardInput = FileHandle.nullDevice
+        do { try p.run() } catch { printErr("error: \(error.localizedDescription)"); return Exit.failed.rawValue }
+        p.waitUntilExit()
+        return p.terminationStatus == 0 ? Exit.ok.rawValue : Exit.failed.rawValue
     }
 
     /// Sends meep://<command>?quiet through LaunchServices (`open -g`), which launches

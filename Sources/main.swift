@@ -443,6 +443,20 @@ AppSettings.migrateFromMeetingRecorder()
 let cliArguments = Array(CommandLine.arguments.dropFirst())
 if CLI.isInvocation(cliArguments) { CLI.main(cliArguments) }
 
+// One instance: a copy started outside LaunchServices (e.g. the binary run directly, or another
+// Meep.app with the same bundle id) hands over to the one already running, which shows Preferences.
+if let id = Bundle.main.bundleIdentifier,
+   let running = NSRunningApplication.runningApplications(withBundleIdentifier: id)
+       .first(where: { $0.processIdentifier < getpid() }),
+   let url = running.bundleURL {
+    let done = DispatchSemaphore(value: 0)
+    NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration()) { _, _ in
+        done.signal()
+    }
+    _ = done.wait(timeout: .now() + 5)
+    exit(0)
+}
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
