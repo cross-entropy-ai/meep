@@ -30,65 +30,16 @@ This installs `Meep.app` into `/Applications` and the `meep` command (see [Autom
 
 The first time you record, macOS asks for **Microphone** and **System Audio Recording** access. Allow both.
 
-### Build from source
-
-Needs the Xcode Command Line Tools.
-
-```bash
-brew install meson ninja
-git clone https://github.com/cross-entropy-ai/meep.git
-cd meep
-./build.sh                      # the first build takes a few minutes (builds WebRTC and ffmpeg)
-open build/Meep.app
-```
-
-`scripts/release.sh` builds the signed, notarized zip for a release.
-
-## Use
-
-1. Click the microphone icon in the menu bar and choose **Start Recording** (or press ⌘⇧R).
-2. The icon turns red while recording.
-3. Choose **Stop Recording** when the meeting ends.
-
-Recordings are saved to `~/Documents/MeetingRecordings/<date_time>/`:
-
-| File | What it is |
-|---|---|
-| `mixed.m4a` | The meeting, both sides. Usually all you need. |
-| `raw/` | Separate tracks for you and the other side, and a `session.json` with details. |
-
-Preferences (⌘,) let you change the hotkey, language and more. The Audio tab shows whether microphone and system audio access are granted, picks the microphone (the system default, or a specific input device) with a live input level, can turn system audio off to record only the microphone, and sets post-processing: echo cancellation, noise suppression and auto level.
-
 ## Automation
 
-The app binary doubles as a command-line tool:
-
 ```bash
-mr=meep     # installed by Homebrew; otherwise /Applications/Meep.app/Contents/MacOS/Meep
-
-dir=$($mr start --wait)          # starts recording (launching the app if needed), prints the folder;
-                                 #   exit 1 with the reason if it can't start
-$mr stop --wait                  # returns once the recording is saved; exit 0 if it is complete or recovered
-$mr status                       # JSON: idle / recording / saving, and the latest recording
-$mr aec "$dir"                   # redo a recording's mic processing; $mr remix "$dir" redoes the mix
-
-$mr aec --system call.caf --mic me.caf -o me_clean.wav    # remove speaker echo from a mic track
-$mr mix --system call.caf --mic me_clean.wav -o meeting.m4a
+meep start --wait    # start recording, print the recording folder
+meep stop --wait     # stop, return once the recording is saved
+meep status          # JSON: idle / recording / saving
+meep help            # all commands and settings
 ```
 
-Results (a folder or file path, or JSON) go to stdout; messages and progress go to stderr.
-Exit codes: `0` ok, `1` failed, `2` bad usage, `3` timed out. `$mr help` lists everything.
-Recordings started or stopped from the command line show no alerts and open no Finder window.
-`open "meep://start"` and `…://stop` work too, without waiting (add `?quiet` for the same silence).
-Settings can be changed with `defaults write com.junyi.Meep <key> -bool|-string <value>` (e.g. `autoLevel -bool true`); `$mr help` lists the keys.
-
-**Run After Saving** (Preferences › Agent) runs a command of your choice after each recording, e.g. a transcription script, with the recording folder as `$1`. It runs via `zsh -lc`, which reads `~/.zprofile` but not `~/.zshrc`, so set `PATH` there or use full paths. Its progress and exit status appear in `raw/session.json` under `after_save`.
-
-To save recordings somewhere else, use Preferences › General › Recordings Folder › Change…, or:
-
-```bash
-defaults write com.junyi.Meep recordingsFolder -string ~/Meetings
-```
+**Run After Saving** (Preferences › Agent) runs a command after each recording, e.g. a transcription script, with the recording folder as `$1`.
 
 ## License
 
