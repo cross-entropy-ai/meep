@@ -76,7 +76,7 @@ enum AfterSaveHook {
 /// on disk (no connection to the running app needed). `start/stop --wait` poll the same state.
 enum StatusReport {
     static func json() -> String {
-        let data = (try? JSONSerialization.data(withJSONObject: report(), options: [.prettyPrinted, .sortedKeys])) ?? Data()
+        let data = (try? JSONSerialization.data(withJSONObject: report(), options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])) ?? Data()
         return String(data: data, encoding: .utf8) ?? "{}"
     }
 
@@ -137,7 +137,7 @@ enum HelpText {
               Start recording. --wait: return once it is live and print its folder (timeout 15 s).
           \(exe) stop [--wait] [--timeout <sec>]
               Stop recording. --wait: return once it is saved and print its folder (timeout 600 s);
-              exit 0 if its status is "complete", 1 otherwise (or if nothing was recording).
+              exit 0 if its status is "complete" or "recovered", 1 otherwise (or if nothing was recording).
           \(exe) status [--json]
               JSON: {"state": "idle|recording|saving", "current": {...},
                      "latest": {"dir", "mixed", "status", "after_save", ...}}

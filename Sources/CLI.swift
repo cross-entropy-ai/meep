@@ -96,8 +96,9 @@ enum CLI {
     }
 
     /// `stop [--wait] [--timeout <sec>]`: asks the app to stop recording. With --wait, returns once
-    /// the recording is saved and prints its folder: exit 0 if its status is "complete", 1 for any
-    /// other status (or if nothing was recording), 3 on timeout.
+    /// the recording is saved and prints its folder: exit 0 if its status is "complete" or
+    /// "recovered" (interrupted, every track restored), 1 for any other status (or if nothing was
+    /// recording), 3 on timeout.
     static func stop(_ args: [String]) throws -> Exit {
         let (wait, timeout) = try waitOptions(args, defaultTimeout: 600)
         let dir = StatusReport.current?.dir  // the recording this stop is about
@@ -112,7 +113,7 @@ enum CLI {
             let status = Finalizer.readMeta(dir)?["status"] as? String ?? ""
             if !["", "recording", "saving"].contains(status) {
                 print(dir.path)
-                if status == "complete" { return .ok }
+                if ["complete", "recovered"].contains(status) { return .ok }
                 printErr("recording saved with status \(status) (see \(Finalizer.rawFolder)/session.json)")
                 return .failed
             }
@@ -277,7 +278,7 @@ enum CLI {
     }
 
     static func printJSON(_ object: [String: Any]) {
-        let data = (try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])) ?? Data()
+        let data = (try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])) ?? Data()
         print(String(data: data, encoding: .utf8) ?? "{}")
     }
 

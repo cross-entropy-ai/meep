@@ -55,7 +55,7 @@ The app binary doubles as a command-line tool:
 mr=/Applications/MeetingRecorder.app/Contents/MacOS/MeetingRecorder   # or build/MeetingRecorder.app/…
 
 dir=$($mr start --wait)          # starts recording (launching the app if needed), prints the folder
-$mr stop --wait                  # returns once the recording is saved; exit 0 if it is complete
+$mr stop --wait                  # returns once the recording is saved; exit 0 if it is complete or recovered
 $mr status                       # JSON: idle / recording / saving, and the latest recording
 
 $mr aec --system call.caf --mic me.caf -o me_clean.wav    # remove speaker echo from a mic track
