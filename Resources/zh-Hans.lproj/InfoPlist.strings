@@ -1,0 +1,2 @@
+NSMicrophoneUsageDescription = "录制会议中你自己的发言。";
+NSAudioCaptureUsageDescription = "录制会议中其他人的声音（电脑播放的声音）。";

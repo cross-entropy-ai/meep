@@ -1,0 +1,2 @@
+NSMicrophoneUsageDescription = "Grava o que você fala na reunião.";
+NSAudioCaptureUsageDescription = "Grava os outros participantes da reunião (o som que o seu Mac reproduz).";

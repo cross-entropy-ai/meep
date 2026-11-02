@@ -1,0 +1,2 @@
+NSMicrophoneUsageDescription = "Nimmt auf, was du im Meeting sagst.";
+NSAudioCaptureUsageDescription = "Nimmt alle anderen im Meeting auf (den Ton, den dein Mac abspielt).";

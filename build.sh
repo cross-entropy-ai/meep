@@ -12,6 +12,8 @@ cp Info.plist "$APP/Contents/Info.plist"
 
 # Menu bar icons (loaded at runtime as SVG) and the app icon (.icns from assets/app-icon.png).
 cp assets/*.svg "$APP/Contents/Resources/"
+# UI translations (Localizable.strings) and permission prompts (InfoPlist.strings), one .lproj per language.
+cp -R Resources/*.lproj "$APP/Contents/Resources/"
 ICONSET=build/obj/AppIcon.iconset
 rm -rf "$ICONSET"; mkdir -p "$ICONSET"
 for s in 16 32 128 256 512; do

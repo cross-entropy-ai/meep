@@ -1,0 +1,2 @@
+NSMicrophoneUsageDescription = "회의에서 내가 말하는 내용을 녹음합니다.";
+NSAudioCaptureUsageDescription = "회의의 다른 참가자 목소리(Mac에서 재생되는 소리)를 녹음합니다.";

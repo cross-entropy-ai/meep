@@ -2,6 +2,20 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>en</string>
+        <string>zh-Hans</string>
+        <string>zh-Hant</string>
+        <string>ja</string>
+        <string>ko</string>
+        <string>de</string>
+        <string>fr</string>
+        <string>es</string>
+        <string>pt-BR</string>
+    </array>
     <key>CFBundleIdentifier</key>
     <string>com.junyi.MeetingRecorder</string>
     <key>CFBundleName</key>
@@ -33,9 +47,9 @@
     <key>LSUIElement</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>录制会议中你自己的发言。</string>
+    <string>Records what you say in the meeting.</string>
     <key>NSAudioCaptureUsageDescription</key>
-    <string>录制会议中其他人的声音（电脑播放的声音）。</string>
+    <string>Records everyone else in the meeting (the sound your Mac plays).</string>
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
