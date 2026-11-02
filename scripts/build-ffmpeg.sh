@@ -42,7 +42,9 @@ CONFIGURE=(
   --disable-doc --disable-debug --disable-network
   --disable-avdevice --disable-swscale
   --enable-protocol=file,pipe
-  --enable-demuxer=caf,wav,mov,aac,mp3,flac,ogg
+  # data: tiny; without it rawdec.c's raw_data_read_header() (not under #if upstream) is unused
+  # and clang warns.
+  --enable-demuxer=caf,wav,mov,aac,mp3,flac,ogg,data
   --enable-decoder=pcm_s16le,pcm_s24le,pcm_f32le,pcm_s16be,aac,mp3,flac,vorbis,opus
   --enable-parser=aac,mpegaudio,flac,vorbis,opus
   --enable-encoder=aac,pcm_s16le
@@ -57,6 +59,8 @@ if [ ! -f ffbuild/config.mak ] || [ "$(cat .configure-args 2>/dev/null)" != "${C
   "$ROOT/$SRC/configure" "${CONFIGURE[@]}"
   printf '%s' "${CONFIGURE[*]}" > .configure-args
 fi
+# The link line keeps -Llibswscale even with --disable-swscale; an empty dir avoids an ld warning.
+mkdir -p libswscale
 LICENSE=$(sed -n 's/^#define FFMPEG_LICENSE "\(.*\)"$/\1/p' config.h)
 [ "$LICENSE" = "LGPL version 2.1 or later" ] || { echo "error: ffmpeg license is '$LICENSE', want LGPL 2.1" >&2; exit 1; }
 make -j"$(sysctl -n hw.ncpu 2>/dev/null || echo 4)" ffmpeg   # ffmpeg = stripped ffmpeg_g
