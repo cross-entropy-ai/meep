@@ -10,10 +10,18 @@ enum Mixer {
 
     struct Result { var gainsDB: [String: Double] = [:]; var loudnessLUFS: [String: Double] = [:] }
 
+    /// The ffmpeg bundled at MeetingRecorder.app/Contents/Helpers/ffmpeg (built by scripts/build-ffmpeg.sh).
+    /// Bundle.main is the .app also for the CLI (Contents/MacOS/MeetingRecorder run directly).
+    /// MEETINGRECORDER_FFMPEG overrides it, for development.
     static func ffmpegPath() -> String? {
-        ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg"]
-            .first { FileManager.default.isExecutableFile(atPath: $0) }
+        let env = ProcessInfo.processInfo.environment["MEETINGRECORDER_FFMPEG"] ?? ""
+        let path = env.isEmpty
+            ? Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/ffmpeg").path : env
+        return FileManager.default.isExecutableFile(atPath: path) ? path : nil
     }
+
+    static let ffmpegMissing = "ffmpeg not found (MeetingRecorder.app/Contents/Helpers/ffmpeg, "
+        + "or $MEETINGRECORDER_FFMPEG); rebuild the app with ./build.sh"
 
     @discardableResult
     static func mix(system: URL?, mic: URL?, output: URL, progress: ((Double) -> Void)? = nil) throws -> Result {
@@ -69,7 +77,7 @@ enum Mixer {
     private static func runFFmpeg(_ args: [String], duration: Double = 0,
                                   progress: ((Double) -> Void)? = nil) throws -> String {
         guard let ffmpeg = ffmpegPath() else {
-            throw CAError(what: "ffmpeg not found (brew install ffmpeg)", status: -1)
+            throw CAError(what: ffmpegMissing, status: -1)
         }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: ffmpeg)

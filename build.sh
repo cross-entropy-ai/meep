@@ -6,9 +6,15 @@ cd "$(dirname "$0")"
 APP=build/MeetingRecorder.app
 WEBRTC=vendor/webrtc   # built by scripts/build-webrtc.sh
 [ -f "$WEBRTC/lib/libwebrtc_apm.a" ] || ./scripts/build-webrtc.sh
+FFMPEG=vendor/ffmpeg   # built by scripts/build-ffmpeg.sh
+[ -x "$FFMPEG/bin/ffmpeg" ] || ./scripts/build-ffmpeg.sh
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Helpers"
 cp Info.plist "$APP/Contents/Info.plist"
+# ffmpeg (LGPL) runs as a separate helper process; its license and configure line go along.
+cp "$FFMPEG/bin/ffmpeg" "$APP/Contents/Helpers/ffmpeg"
+mkdir -p "$APP/Contents/Resources/ffmpeg"
+cp "$FFMPEG/LICENSE" "$FFMPEG/BUILDINFO" "$APP/Contents/Resources/ffmpeg/"
 
 # Menu bar icons (loaded at runtime as SVG) and the app icon (.icns from assets/app-icon.png).
 cp assets/*.svg "$APP/Contents/Resources/"
@@ -34,6 +40,8 @@ swiftc -O -swift-version 5 \
 
 # A stable signing identity keeps TCC permissions across rebuilds; fall back to ad-hoc.
 IDENTITY="${SIGN_IDENTITY:-$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development/{print $2; exit}')}"
+# Nested code first: the app's signature seals the already-signed helper.
+codesign --force --sign "${IDENTITY:--}" "$APP/Contents/Helpers/ffmpeg"
 codesign --force --sign "${IDENTITY:--}" "$APP"
 echo "Built $APP (signed with: ${IDENTITY:-ad-hoc})"
 

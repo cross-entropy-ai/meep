@@ -23,10 +23,10 @@
 Requires macOS 14.2+ on Apple Silicon and the Xcode Command Line Tools.
 
 ```bash
-brew install ffmpeg meson ninja
+brew install meson ninja
 git clone https://github.com/Junyi-99/agent-meetingrecorder.git
 cd agent-meetingrecorder
-./build.sh                      # the first build takes a few minutes
+./build.sh                      # the first build takes a few minutes (builds WebRTC and ffmpeg)
 open build/MeetingRecorder.app
 ```
 
@@ -65,3 +65,5 @@ build/MeetingRecorder.app/Contents/MacOS/MeetingRecorder --help
 ## License
 
 [MIT](LICENSE). Echo cancellation uses [webrtc-audio-processing](https://gitlab.freedesktop.org/pulseaudio/webrtc-audio-processing) (BSD); icons from [Tabler Icons](https://tabler.io/icons) (MIT).
+
+The app bundles [FFmpeg](https://ffmpeg.org) (LGPL-2.1) as a separate helper, `Contents/Helpers/ffmpeg`, for mixing. It is built from unmodified source by `scripts/build-ffmpeg.sh`, which records the exact configure line in `Contents/Resources/ffmpeg/BUILDINFO` next to the license; see [ffmpeg.org/legal.html](https://ffmpeg.org/legal.html).
