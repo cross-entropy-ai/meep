@@ -1,12 +1,14 @@
 import Foundation
 
-/// Mixes system + mic tracks into one mono AAC file with ffmpeg.
+/// Mixes system + mic tracks into one mono file with ffmpeg: AAC 96 kbps (.m4a), or 16-bit PCM
+/// if the output ends in .wav or .caf. Inputs: anything ffmpeg can decode.
 /// Each track is first brought to the same loudness with a static gain, because the system
 /// track is a full-scale digital signal while the mic picks up much quieter acoustic sound.
 enum Mixer {
     static let targetLUFS = -20.0
     static let maxBoostDB = 20.0   // don't blow up the noise floor of a track that is mostly silent
     static let maxCutDB = -20.0
+    static let outputExtensions: Set<String> = ["m4a", "wav", "caf"]
 
     struct Result { var gainsDB: [String: Double] = [:]; var loudnessLUFS: [String: Double] = [:] }
 
@@ -38,8 +40,9 @@ enum Mixer {
         }
         let filter = chains.joined(separator: ";") + ";" + labels.joined() +
             "amix=inputs=\(labels.count):duration=longest:normalize=0,alimiter=limit=0.95:level=false[out]"
-        args += ["-filter_complex", filter, "-map", "[out]",
-                 "-ar", "48000", "-ac", "1", "-c:a", "aac", "-b:a", "96k", output.path]
+        let pcm = ["wav", "caf"].contains(output.pathExtension.lowercased())
+        args += ["-filter_complex", filter, "-map", "[out]", "-ar", "48000", "-ac", "1"]
+            + (pcm ? ["-c:a", "pcm_s16le"] : ["-c:a", "aac", "-b:a", "96k"]) + [output.path]
         let length = inputs.map { Finalizer.duration($0.1) }.max() ?? 0
         let mixBase = 1 - mixShare
         _ = try runFFmpeg(args, duration: length, progress: { progress?(mixBase + mixShare * $0) })

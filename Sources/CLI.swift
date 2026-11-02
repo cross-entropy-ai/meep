@@ -33,6 +33,7 @@ enum CLI {
             case "login-item": code = try loginItem(rest)
             case "aec": code = try aec(rest)
             case "remix": code = try remix(rest)
+            case "mix": code = try mix(rest)
             default: throw UsageError(message: "unknown command: \(args[0])")
             }
             exit(code.rawValue)
@@ -71,9 +72,23 @@ enum CLI {
         return .ok
     }
 
-    /// `aec <recording-dir> [out]`: echo cancellation on a recording's tracks.
+    /// `aec --system <file> --mic <file> -o <out.caf|.wav>`: removes the system audio's echo from
+    /// the mic track. Or `aec <recording-dir> [out]`: the same on a recording's tracks.
     static func aec(_ args: [String]) throws -> Exit {
-        let a = try Args(args, count: 1...2)
+        let a = try Args(args, options: ["--system", "--mic", "-o"], count: 0...2)
+        if a.positional.isEmpty {
+            guard let system = a["--system"], let mic = a["--mic"], let out = a["-o"] else {
+                throw UsageError(message: "aec needs --system <file> --mic <file> -o <out>, or <recording-dir> [out]")
+            }
+            let output = URL(fileURLWithPath: out)
+            try checkExtension(output, EchoCanceller.outputExtensions)
+            try runAEC(system: try inputFile(system), mic: try inputFile(mic), output: output)
+            print(output.path)
+            return .ok
+        }
+        guard a.values.isEmpty else {
+            throw UsageError(message: "aec takes either <recording-dir> [out] or --system/--mic/-o, not both")
+        }
         let dir = try recordingDir(a.positional[0])
         let raw = Finalizer.rawDir(dir)
         let system = try firstExisting(raw, [Finalizer.systemPCM, "system.caf"])
@@ -106,6 +121,19 @@ enum CLI {
         let mic = try? firstExisting(raw, [Finalizer.micAECPCM, "mic_aec.caf", Finalizer.micPCM, "mic.caf"])
         guard system != nil || mic != nil else { throw Failure(description: "no tracks found in \(raw.path)") }
         return try runMix(system: system, mic: mic, output: dir.appendingPathComponent("mixed.m4a"), json: a.has("--json"))
+    }
+
+    /// `mix [--system <file>] [--mic <file>] -o <out.m4a|.wav|.caf> [--json]`: loudness-matched mix.
+    static func mix(_ args: [String]) throws -> Exit {
+        let a = try Args(args, options: ["--system", "--mic", "-o"], flags: ["--json"])
+        guard let out = a["-o"] else { throw UsageError(message: "mix needs -o <out>") }
+        guard a["--system"] != nil || a["--mic"] != nil else {
+            throw UsageError(message: "mix needs --system <file>, --mic <file>, or both")
+        }
+        let output = URL(fileURLWithPath: out)
+        try checkExtension(output, Mixer.outputExtensions)
+        return try runMix(system: try a["--system"].map(inputFile), mic: try a["--mic"].map(inputFile),
+                          output: output, json: a.has("--json"))
     }
 
     // MARK: - Shared steps
@@ -143,6 +171,11 @@ enum CLI {
             throw Failure(description: "not a directory: \(path)")
         }
         return dir
+    }
+
+    static func inputFile(_ path: String) throws -> URL {
+        guard FileManager.default.fileExists(atPath: path) else { throw Failure(description: "no such file: \(path)") }
+        return URL(fileURLWithPath: path)
     }
 
     static func firstExisting(_ dir: URL, _ names: [String]) throws -> URL {
