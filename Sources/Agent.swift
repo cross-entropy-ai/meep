@@ -127,38 +127,54 @@ enum StatusReport {
 
 enum HelpText {
     static var text: String {
-        let exe = Bundle.main.executableURL?.path ?? "MeetingRecorder"
+        let exe = "MeetingRecorder"
         return """
         MeetingRecorder — records system audio + microphone for meetings.
+        CLI: \(Bundle.main.executableURL?.path ?? exe) <command> (`cmd` and `--cmd` are the same)
 
         CONTROL (the app must be installed; these launch it if needed)
-          open "meetingrecorder://start"         start recording
-          open "meetingrecorder://stop"          stop recording and save
-          open "meetingrecorder://preferences"   open Preferences
+          \(exe) start [--wait] [--timeout <sec>]
+              Start recording. --wait: return once it is live and print its folder (timeout 15 s).
+          \(exe) stop [--wait] [--timeout <sec>]
+              Stop recording. --wait: return once it is saved and print its folder (timeout 600 s);
+              exit 0 if its status is "complete", 1 otherwise (or if nothing was recording).
+          \(exe) status [--json]
+              JSON: {"state": "idle|recording|saving", "current": {...},
+                     "latest": {"dir", "mixed", "status", "after_save", ...}}
+          URL scheme: open "meetingrecorder://start" (also stop, preferences); returns at once
 
-        COMMANDS
-          \(exe) --status
-              JSON: {"state": "idle|recording|saving", "current": {...}, "latest": {"dir", "mixed", ...}}.
-              Poll it after "stop" until state is "idle" to know the recording is saved.
-          \(exe) --aec <recording-dir> [out.caf]
-              Re-run WebRTC echo cancellation → raw/mic_aec.caf
-          \(exe) --remix <recording-dir>
-              Re-mix the tracks → mixed.m4a
-          \(exe) --login-item on|off|status
-              Start at Login
-          \(exe) --help
+        PROCESSING (inputs: any format ffmpeg decodes; output format follows the extension)
+          \(exe) aec --system <file> --mic <file> -o <out.caf|.wav>
+              WebRTC echo cancellation: removes the system audio from the mic. 16-bit PCM.
+          \(exe) mix [--system <file>] [--mic <file>] -o <out.m4a|.wav|.caf> [--json]
+              Loudness-matched mix: AAC (.m4a) or 16-bit PCM (.wav/.caf).
+              Loudness and gains go to stderr, or with --json into a JSON object on stdout.
+          \(exe) aec <recording-dir> [out]     same, on a recording → raw/mic_aec.caf
+          \(exe) remix <recording-dir> [--json] same, on a recording → mixed.m4a
+
+        OTHER
+          \(exe) login-item on|off|status      Start at Login
+          \(exe) help
+
+        CONVENTIONS
+          stdout carries only results (a path, or JSON); messages and progress go to stderr.
+          Exit codes: 0 ok, 1 failed, 2 bad usage, 3 timed out.
 
         OUTPUT  \(RecordingSession.rootDirectory.path)/<yyyy-MM-dd_HHmmss>/
           mixed.m4a          system audio + microphone, loudness-matched
           raw/system.caf     what the Mac played (other participants)
           raw/mic.caf        microphone (you)
           raw/mic_aec.caf    microphone with speaker echo removed (WebRTC mode)
-          raw/session.json   status, timing, interruptions, warnings
+          raw/session.json   status, timing, interruptions, warnings, after_save
           All tracks start at the same moment: sample N of every file is the same instant.
+          Folder: $MEETINGRECORDER_ROOT, else
+            defaults write com.junyi.MeetingRecorder recordingsFolder -string <path>
+          (the app reads the defaults key; the environment variable only affects this process).
 
         AFTER SAVING
           Preferences › Agent › Run After Saving: a shell command run after each recording is saved,
           with the recording folder as $1 and $MEETINGRECORDER_DIR. Output: raw/after-save.log.
+          session.json "after_save": {"status": "running|done|failed", "exit_status", ...}.
         """
     }
 }
