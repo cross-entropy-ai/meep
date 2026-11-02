@@ -15,8 +15,11 @@ enum Mixer {
     /// MEETINGRECORDER_FFMPEG overrides it, for development.
     static func ffmpegPath() -> String? {
         let env = ProcessInfo.processInfo.environment["MEETINGRECORDER_FFMPEG"] ?? ""
-        let path = env.isEmpty
-            ? Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/ffmpeg").path : env
+        let path = if env.isEmpty {
+            Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/ffmpeg").path
+        } else {
+            env
+        }
         return FileManager.default.isExecutableFile(atPath: path) ? path : nil
     }
 
