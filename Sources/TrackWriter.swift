@@ -84,13 +84,13 @@ final class TrackWriter: @unchecked Sendable {
         let ratio = format.sampleRate / inFmt.sampleRate
         let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio + 64)
         guard let out = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else { return nil }
-        var fed = false
+        // Some SDKs mark the input block @Sendable, though convert() calls it synchronously.
+        let input = PendingInput(buffer)
         var err: NSError?
         let status = converter.convert(to: out, error: &err) { _, inputStatus in
-            if fed { inputStatus.pointee = .noDataNow; return nil }
-            fed = true
+            guard let next = input.take() else { inputStatus.pointee = .noDataNow; return nil }
             inputStatus.pointee = .haveData
-            return buffer
+            return next
         }
         return (status == .error || out.frameLength == 0) ? nil : out
     }
@@ -142,4 +142,11 @@ extension AVAudioPCMBuffer {
         }
         return p
     }
+}
+
+/// The one buffer a converter input block hands over, then nothing.
+private final class PendingInput: @unchecked Sendable {
+    private var buffer: AVAudioPCMBuffer?
+    init(_ buffer: AVAudioPCMBuffer) { self.buffer = buffer }
+    func take() -> AVAudioPCMBuffer? { defer { buffer = nil }; return buffer }
 }
