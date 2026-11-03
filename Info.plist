@@ -2,68 +2,72 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleDevelopmentRegion</key>
-	<string>en</string>
-	<key>CFBundleDisplayName</key>
-	<string>Meep</string>
-	<key>CFBundleExecutable</key>
-	<string>Meep</string>
-	<key>CFBundleIconFile</key>
-	<string>AppIcon</string>
-	<key>CFBundleIdentifier</key>
-	<string>dev.junyi.Meep</string>
-	<key>CFBundleLocalizations</key>
-	<array>
-		<string>en</string>
-		<string>zh-Hans</string>
-		<string>zh-Hant</string>
-		<string>ja</string>
-		<string>ko</string>
-		<string>de</string>
-		<string>fr</string>
-		<string>es</string>
-		<string>pt-BR</string>
-	</array>
-	<key>CFBundleName</key>
-	<string>Meep</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>1.0.4</string>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLName</key>
-			<string>dev.junyi.Meep</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>meep</string>
-			</array>
-		</dict>
-	</array>
-	<key>CFBundleVersion</key>
-	<string>12</string>
-	<key>LSMinimumSystemVersion</key>
-	<string>15.0</string>
-	<key>LSUIElement</key>
-	<true/>
-	<key>MRPrivacyPolicyURL</key>
-	<string></string>
-	<key>MRTermsOfUseURL</key>
-	<string></string>
-	<key>NSAudioCaptureUsageDescription</key>
-	<string>Records everyone else in the meeting (the sound your Mac plays).</string>
-	<key>NSHumanReadableCopyright</key>
-	<string>Copyright © 2026 Junyi Hou. All rights reserved.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Records what you say in the meeting.</string>
-	<key>SUEnableAutomaticChecks</key>
-	<true/>
-	<key>SUFeedURL</key>
-	<string>https://github.com/cross-entropy-ai/meep/releases/latest/download/appcast.xml</string>
-	<key>SUPublicEDKey</key>
-	<string>ASKohOQaD6OUpwDeFWqkIjKcsVwHwKRV+dhYAQKZF+s=</string>
-	<key>SUScheduledCheckInterval</key>
-	<integer>604800</integer>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>en</string>
+        <string>zh-Hans</string>
+        <string>zh-Hant</string>
+        <string>ja</string>
+        <string>ko</string>
+        <string>de</string>
+        <string>fr</string>
+        <string>es</string>
+        <string>pt-BR</string>
+    </array>
+    <key>CFBundleIdentifier</key>
+    <string>dev.junyi.Meep</string>
+    <key>CFBundleName</key>
+    <string>Meep</string>
+    <key>CFBundleDisplayName</key>
+    <string>Meep</string>
+    <key>CFBundleExecutable</key>
+    <string>Meep</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.4</string>
+    <key>CFBundleVersion</key>
+    <string>12</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>15.0</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2026 Junyi Hou. All rights reserved.</string>
+    <!-- About tab links. Leave empty until they exist. -->
+    <key>MRPrivacyPolicyURL</key>
+    <string></string>
+    <key>MRTermsOfUseURL</key>
+    <string></string>
+    <!-- Updates (Sparkle): appcast.xml of the latest GitHub release, written by scripts/release.sh;
+         the zip it points to is signed with the EdDSA key whose public half is SUPublicEDKey.
+         Checks weekly unless changed in Preferences › About (no first-launch prompt). -->
+    <key>SUFeedURL</key>
+    <string>https://github.com/cross-entropy-ai/meep/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>ASKohOQaD6OUpwDeFWqkIjKcsVwHwKRV+dhYAQKZF+s=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUScheduledCheckInterval</key>
+    <integer>604800</integer>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Records what you say in the meeting.</string>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>Records everyone else in the meeting (the sound your Mac plays).</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>dev.junyi.Meep</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>meep</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>
