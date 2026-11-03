@@ -354,6 +354,7 @@ struct GeneralPreferencesView: View {
             }
         }
         .formStyle(.grouped)
+        .id(language)  // redraw in the new language; a hidden tab would keep the old one
         .frame(width: 500)
         .fixedSize()
         .onAppear {
@@ -479,6 +480,7 @@ struct AudioPreferencesView: View {
             }
         }
         .formStyle(.grouped)
+        .id(language)  // redraw in the new language; a hidden tab would keep the old one
         .frame(width: 500)
         .fixedSize()
         .onAppear {
@@ -579,6 +581,7 @@ struct AgentPreferencesView: View {
             }
         }
         .formStyle(.grouped)
+        .id(language)  // redraw in the new language; a hidden tab would keep the old one
         .frame(width: 500)
         .fixedSize()
     }
@@ -650,6 +653,7 @@ struct AboutPreferencesView: View {
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 12)
+        .id(language)  // redraw in the new language; a hidden tab would keep the old one
         .frame(width: 460)
         .fixedSize()
     }
