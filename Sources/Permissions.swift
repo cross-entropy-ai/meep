@@ -31,7 +31,7 @@ enum Permissions {
     // a missing symbol degrades to `.unknown` instead of failing to launch.
     private static var service: CFString { "kTCCServiceAudioCapture" as CFString }
     private typealias PreflightFn = @convention(c) (CFString, CFDictionary?) -> Int
-    private typealias RequestFn = @convention(c) (CFString, CFDictionary?, @convention(block) (Bool) -> Void) -> Void
+    private typealias RequestFn = @convention(c) (CFString, CFDictionary?, @escaping @convention(block) (Bool) -> Void) -> Void
     nonisolated(unsafe) private static let tcc =
         dlopen("/System/Library/PrivateFrameworks/TCC.framework/Versions/A/TCC", RTLD_NOW)
     private static let preflight: PreflightFn? =
