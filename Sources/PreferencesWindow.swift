@@ -213,6 +213,21 @@ final class AppState {
         }
     }
 
+    /// General › Restore Defaults: the hotkey and the recordings folder (the view resets the rest).
+    var generalIsDefault: Bool {
+        hotKey == .default && UserDefaults.standard.string(forKey: AppSettings.Key.recordingsFolder) == nil
+    }
+
+    func restoreGeneralDefaults() {
+        if isCapturingHotKey { endHotKeyCapture() }
+        if hotKey != .default { applyHotKey(.default) }
+        if !isRecording {
+            UserDefaults.standard.removeObject(forKey: AppSettings.Key.recordingsFolder)
+            recordingsFolder = RecordingSession.rootDirectory
+            recordingsFolderError = nil
+        }
+    }
+
     // MARK: Hotkey capture
 
     /// Next key press becomes the hotkey. Esc cancels, Delete clears.
@@ -341,7 +356,7 @@ struct GeneralPreferencesView: View {
                 Toggle(tr("Show Recording Time"), isOn: $showElapsed)
             }
 
-            Section(tr("Saving")) {
+            Section {
                 Toggle(tr("Open Folder After Saving"), isOn: $openFolderAfterSaving)
                 LabeledContent {
                     HStack {
@@ -363,6 +378,14 @@ struct GeneralPreferencesView: View {
                 } else if state.isRecording {
                     Text(tr("Can't change while recording.")).font(.caption).foregroundStyle(.secondary)
                 }
+            } header: {
+                Text(tr("Saving"))
+            } footer: {
+                HStack {
+                    Spacer()
+                    Button(tr("Restore Defaults"), action: restoreDefaults)
+                        .disabled(state.isRecording || isDefault)
+                }
             }
         }
         .formStyle(.grouped)
@@ -376,6 +399,22 @@ struct GeneralPreferencesView: View {
         .onChange(of: language) { _, _ in state.onChange() }
         .onChange(of: showMenuBarIcon) { _, _ in state.onChange() }
         .onChange(of: showElapsed) { _, _ in state.onChange() }
+    }
+
+    /// Start at Login is left as it is: it registers the app with the system.
+    private var isDefault: Bool {
+        language == AppLanguage.system.rawValue && showMenuBarIcon == AppSettings.Default.showMenuBarIcon
+            && showElapsed == AppSettings.Default.showElapsedTime
+            && openFolderAfterSaving == AppSettings.Default.openFolderAfterSaving
+            && state.generalIsDefault
+    }
+
+    private func restoreDefaults() {
+        language = AppLanguage.system.rawValue
+        showMenuBarIcon = AppSettings.Default.showMenuBarIcon
+        showElapsed = AppSettings.Default.showElapsedTime
+        openFolderAfterSaving = AppSettings.Default.openFolderAfterSaving
+        state.restoreGeneralDefaults()
     }
 }
 
