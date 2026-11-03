@@ -66,11 +66,12 @@ cask "meep" do
   app "Meep.app"
   binary "#{appdir}/Meep.app/Contents/MacOS/Meep", target: "meep"
 
-  uninstall quit: "com.junyi.Meep"
+  uninstall quit: "dev.junyi.Meep"
 
   # Recordings in ~/Documents/MeepRecordings are left alone.
   zap trash: [
     "~/Library/Application Support/Meep",
+    "~/Library/Preferences/dev.junyi.Meep.plist",
     "~/Library/Preferences/com.junyi.Meep.plist",
   ]
 end

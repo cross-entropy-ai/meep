@@ -22,18 +22,23 @@ enum NoiseSuppression: String, CaseIterable {
     }
 }
 
-/// User settings (UserDefaults domain com.junyi.Meep). Most are written by
+/// User settings (UserDefaults domain dev.junyi.Meep). Most are written by
 /// Preferences through @AppStorage with the same key and default; see `help` for the keys.
-/// CLI: `defaults write com.junyi.Meep echoCancellation -string off|apple|webrtc`
+/// CLI: `defaults write dev.junyi.Meep echoCancellation -string off|apple|webrtc`
 enum AppSettings {
     private static var d: UserDefaults { .standard }
 
-    /// Meep was called MeetingRecorder (com.junyi.MeetingRecorder) before 1.0. Copies those
-    /// settings once, if this domain has none yet; the old domain is left as it is.
-    static func migrateFromMeetingRecorder() {
-        guard let id = Bundle.main.bundleIdentifier, d.persistentDomain(forName: id)?.isEmpty ?? true,
-              let old = d.persistentDomain(forName: "com.junyi.MeetingRecorder"), !old.isEmpty else { return }
-        d.setPersistentDomain(old, forName: id)
+    /// Earlier bundle ids: com.junyi.Meep (1.0.0–1.0.1) and com.junyi.MeetingRecorder (before 1.0).
+    /// Copies the newest of those settings once, if this domain has none yet; the old domains
+    /// are left as they are.
+    static func migrateFromOldDomains() {
+        guard let id = Bundle.main.bundleIdentifier, d.persistentDomain(forName: id)?.isEmpty ?? true else { return }
+        for name in ["com.junyi.Meep", "com.junyi.MeetingRecorder"] {
+            if let old = d.persistentDomain(forName: name), !old.isEmpty {
+                d.setPersistentDomain(old, forName: id)
+                return
+            }
+        }
     }
 
     /// UserDefaults keys of the settings Preferences shows (also used by its @AppStorage).
@@ -65,7 +70,7 @@ enum AppSettings {
 
     /// Where recordings are saved: $MEEP_ROOT, else the `recordingsFolder` default
     /// (a path, `~` expanded), else ~/Documents/MeepRecordings. Set in Preferences › General,
-    /// or `defaults write com.junyi.Meep recordingsFolder -string ~/Meetings`
+    /// or `defaults write dev.junyi.Meep recordingsFolder -string ~/Meetings`
     static var recordingsFolder: URL {
         folder(ProcessInfo.processInfo.environment["MEEP_ROOT"]) ?? appRecordingsFolder
     }

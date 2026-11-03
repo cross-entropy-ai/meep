@@ -17,7 +17,7 @@
         <string>pt-BR</string>
     </array>
     <key>CFBundleIdentifier</key>
-    <string>com.junyi.Meep</string>
+    <string>dev.junyi.Meep</string>
     <key>CFBundleName</key>
     <string>Meep</string>
     <key>CFBundleDisplayName</key>
@@ -54,7 +54,7 @@
     <array>
         <dict>
             <key>CFBundleURLName</key>
-            <string>com.junyi.Meep</string>
+            <string>dev.junyi.Meep</string>
             <key>CFBundleURLSchemes</key>
             <array>
                 <string>meep</string>

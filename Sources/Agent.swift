@@ -211,7 +211,7 @@ enum HelpText {
           raw/session.json   status, timing, interruptions, warnings, after_save
           All tracks start at the same moment: sample N of every file is the same instant.
           Folder: $MEEP_ROOT, else Preferences › General › Recordings Folder, i.e.
-            defaults write com.junyi.Meep recordingsFolder -string <path>
+            defaults write dev.junyi.Meep recordingsFolder -string <path>
           (the app reads the defaults key; the environment variable only affects this process:
           start/stop refuse to run (exit 2) when it differs from the app's folder).
 
@@ -221,7 +221,7 @@ enum HelpText {
           session.json "after_save": {"status": "running|done|failed", "exit_status", ...}.
           Runs via zsh -lc: ~/.zprofile is read, ~/.zshrc is not (set PATH there or use full paths).
 
-        SETTINGS (defaults write com.junyi.Meep <key> <value>; Preferences sets the same)
+        SETTINGS (defaults write dev.junyi.Meep <key> <value>; Preferences sets the same)
           inputDeviceUID -string <uid>|""     microphone; "" = system default
           recordSystemAudio -bool true|false   record what the Mac plays
           echoCancellation -string webrtc|apple|off

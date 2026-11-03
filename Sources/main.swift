@@ -438,7 +438,7 @@ if let exe = Bundle.main.executableURL?.standardizedFileURL,
     exit(1)
 }
 
-AppSettings.migrateFromMeetingRecorder()
+AppSettings.migrateFromOldDomains()
 
 let cliArguments = Array(CommandLine.arguments.dropFirst())
 if CLI.isInvocation(cliArguments) { CLI.main(cliArguments) }

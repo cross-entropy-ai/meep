@@ -169,7 +169,7 @@ enum CLI {
         let mine = AppSettings.recordingsFolder.resolvingSymlinksInPath().path
         guard mine == app else {
             throw UsageError(message: "MEEP_ROOT (\(mine)) differs from the app's recordings folder (\(app)); "
-                             + "unset it, or set the folder with defaults write com.junyi.Meep recordingsFolder")
+                             + "unset it, or set the folder with defaults write dev.junyi.Meep recordingsFolder")
         }
     }
 
