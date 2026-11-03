@@ -100,7 +100,6 @@
 "Choose" = "선택";
 "Choose where to save recordings." = "녹음을 저장할 위치를 선택하세요.";
 "Can't save to %@: no write permission." = "%@에 저장할 수 없습니다: 쓰기 권한이 없습니다.";
-"Set by MEEP_ROOT." = "MEEP_ROOT로 지정되어 있습니다.";
 "The microphone recorded nothing. Check the input device." = "마이크에 아무것도 녹음되지 않았습니다. 입력 기기를 확인하세요.";
 "System audio recorded nothing." = "시스템 오디오에 아무것도 녹음되지 않았습니다.";
 "No microphone access, and system audio recording is off: there is nothing to record." = "마이크 접근 권한이 없고 시스템 오디오 녹음도 꺼져 있어 녹음할 내용이 없습니다.";

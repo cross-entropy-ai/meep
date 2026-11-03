@@ -100,7 +100,6 @@
 "Choose" = "選択";
 "Choose where to save recordings." = "録音の保存先を選択してください。";
 "Can't save to %@: no write permission." = "%@ に保存できません：書き込み権限がありません。";
-"Set by MEEP_ROOT." = "MEEP_ROOT で指定されています。";
 "The microphone recorded nothing. Check the input device." = "マイクに何も録音されませんでした。入力デバイスを確認してください。";
 "System audio recorded nothing." = "システムオーディオに何も録音されませんでした。";
 "No microphone access, and system audio recording is off: there is nothing to record." = "マイクへのアクセスがなく、システムオーディオの録音もオフです。録音するものがありません。";

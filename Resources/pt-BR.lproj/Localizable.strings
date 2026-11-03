@@ -100,7 +100,6 @@
 "Choose" = "Escolher";
 "Choose where to save recordings." = "Escolha onde salvar as gravações.";
 "Can't save to %@: no write permission." = "Não é possível salvar em %@: sem permissão de gravação.";
-"Set by MEEP_ROOT." = "Definido por MEEP_ROOT.";
 "The microphone recorded nothing. Check the input device." = "O microfone não gravou nada. Verifique o dispositivo de entrada.";
 "System audio recorded nothing." = "O áudio do sistema não gravou nada.";
 "No microphone access, and system audio recording is off: there is nothing to record." = "Sem acesso ao microfone e a gravação do áudio do sistema está desativada: não há nada para gravar.";

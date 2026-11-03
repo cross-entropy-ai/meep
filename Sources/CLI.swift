@@ -1,8 +1,8 @@
 import Foundation
 import Synchronization
 
-/// Command-line interface (usage: HelpText in Agent.swift).
-/// stdout carries only results (a path, or JSON); diagnostics and progress go to stderr.
+/// Command-line interface (usage: HelpText at the end of this file).
+/// stdout carries only results (a path, a word, or JSON); diagnostics and progress go to stderr.
 /// Exit codes: 0 ok, 1 failed, 2 usage error, 3 timed out.
 enum CLI {
     enum Exit: Int32 { case ok = 0, failed = 1, usage = 2, timeout = 3 }
@@ -11,12 +11,15 @@ enum CLI {
     struct UsageError: Error { let message: String }
 
     /// A runtime failure with a plain message: exit code 1.
-    struct Failure: Error, CustomStringConvertible { let description: String }
+    struct Failure: Error, CustomStringConvertible {
+        let description: String
+        init(_ description: String) { self.description = description }
+    }
 
     /// Whether `args` (without the program name) is a CLI invocation. No arguments, or the
     /// arguments macOS and Cocoa add at launch (-psn_0_1234, -NSDocumentRevisionsDebugMode YES,
-    /// -AppleLanguages …), mean: launch the GUI. Anything else (also `-help`) is the CLI, which
-    /// reports what it doesn't know instead of silently opening the app.
+    /// -AppleLanguages …), mean: launch the GUI. Anything else is the CLI, which reports what it
+    /// doesn't know instead of silently opening the app.
     /// Exception: no arguments typed in a terminal (stdin is a tty; LaunchServices gives the app
     /// /dev/null) is the CLI too, which opens the app the way the Dock does (`openApp`).
     static func isInvocation(_ args: [String]) -> Bool {
@@ -24,15 +27,14 @@ enum CLI {
         return !["-psn_", "-NS", "-Apple"].contains { first.hasPrefix($0) }
     }
 
-    /// Runs the command in `args` (non-empty) and exits. `cmd` and `--cmd` are the same command.
+    /// Runs the command in `args` (non-empty) and exits.
     static func main(_ args: [String]) -> Never {
         if args.isEmpty { exit(openApp()) }
-        let name = if args[0] == "-h" { "help" } else if args[0].hasPrefix("--") { String(args[0].dropFirst(2)) } else { args[0] }
         let rest = Array(args.dropFirst())
         do {
             let code: Exit
-            switch name {
-            case "help": code = try help(rest)
+            switch args[0] {
+            case "help", "-h", "--help": code = try help(rest)
             case "version": code = try version(rest)
             case "status": code = try status(rest)
             case "login-item": code = try loginItem(rest)
@@ -45,7 +47,7 @@ enum CLI {
             }
             exit(code.rawValue)
         } catch let e as UsageError {
-            printErr("error: \(e.message)\nusage: Meep help")
+            printErr("error: \(e.message)\nusage: meep help")
             exit(Exit.usage.rawValue)
         } catch {
             printErr("error: \(error)")
@@ -68,10 +70,11 @@ enum CLI {
         return .ok
     }
 
-    /// `status [--json]`: always JSON (--json is accepted for symmetry with other commands).
+    /// `status [--json]`: the state (idle, recording or saving); --json: the full report.
     static func status(_ args: [String]) throws -> Exit {
-        _ = try Args(args, flags: ["--json"])
-        printJSON(StatusReport.report())
+        let a = try Args(args, flags: ["--json"])
+        let report = StatusReport.report()
+        if a.has("--json") { JSON.print(report) } else { print(report.state.rawValue) }
         return .ok
     }
 
@@ -91,10 +94,9 @@ enum CLI {
     /// (reason on stderr), 3 on timeout. Already recording: that recording counts (exit 0).
     static func start(_ args: [String]) throws -> Exit {
         let (wait, timeout) = try waitOptions(args, defaultTimeout: 15)
-        try checkSameFolderAsApp()
-        if let c = StatusReport.current, c.state == "recording" {
+        if let c = StatusReport.current, c.state == .recording {
             printErr("already recording")
-            if wait { print(c.dir.path) }
+            if wait { print(c.dir) }
             return .ok
         }
         let sent = Date()
@@ -102,8 +104,8 @@ enum CLI {
         guard wait else { return .ok }
         let deadline = Date().addingTimeInterval(timeout)
         while true {
-            if let c = StatusReport.current, c.state == "recording" {
-                print(c.dir.path)
+            if let c = StatusReport.current, c.state == .recording {
+                print(c.dir)
                 return .ok
             }
             if let error = StartFailure.since(sent) {
@@ -124,9 +126,8 @@ enum CLI {
     /// Not recording: nothing to do, exit 0 ("not recording" on stderr).
     static func stop(_ args: [String]) throws -> Exit {
         let (wait, timeout) = try waitOptions(args, defaultTimeout: 600)
-        try checkSameFolderAsApp()
         // The recording this stop is about (not one that is only being saved already).
-        let live = StatusReport.current.flatMap { $0.state == "recording" ? $0.dir : nil }
+        let live = StatusReport.current.flatMap { $0.state == .recording ? URL(fileURLWithPath: $0.dir) : nil }
         try send("stop")  // also when idle: a start may be on its way in the app
         guard let dir = live else {
             printErr("not recording")
@@ -135,15 +136,16 @@ enum CLI {
         guard wait else { return .ok }
         let deadline = Date().addingTimeInterval(timeout)
         while true {
-            let status = Finalizer.readMeta(dir)?["status"] as? String ?? ""
-            if !["", "recording", "saving"].contains(status) {
+            let status = Session.read(dir)?.status
+            if let status, !status.isUnfinished {
                 print(dir.path)
-                if ["complete", "recovered"].contains(status) { return .ok }
-                printErr("recording saved with status \(status) (see \(Finalizer.rawFolder)/session.json)")
+                if status.isOK { return .ok }
+                printErr("recording saved with status \(status.rawValue) (see \(Finalizer.rawFolder)/session.json)")
                 return .failed
             }
             if Date() >= deadline {
-                printErr("timed out after \(String(format: "%g", timeout)) s: \(dir.path) is not saved yet (status \(status))")
+                printErr("timed out after \(String(format: "%g", timeout)) s: \(dir.path) is not saved yet"
+                         + " (status \(status?.rawValue ?? "unknown"))")
                 return .timeout
             }
             Thread.sleep(forTimeInterval: 0.25)
@@ -159,18 +161,6 @@ enum CLI {
             timeout = v
         }
         return (a.has("--wait"), timeout)
-    }
-
-    /// The app reads the recordings folder from its settings; $MEEP_ROOT only reaches
-    /// this process. If they differ, --wait and status would watch the wrong folder forever.
-    private static func checkSameFolderAsApp() throws(UsageError) {
-        guard AppSettings.recordingsFolderFromEnvironment else { return }
-        let app = AppSettings.appRecordingsFolder.resolvingSymlinksInPath().path
-        let mine = AppSettings.recordingsFolder.resolvingSymlinksInPath().path
-        guard mine == app else {
-            throw UsageError(message: "MEEP_ROOT (\(mine)) differs from the app's recordings folder (\(app)); "
-                             + "unset it, or set the folder with defaults write dev.junyi.Meep recordingsFolder")
-        }
     }
 
     /// `meep` alone: opens this Meep.app through LaunchServices, which shows the running
@@ -197,108 +187,89 @@ enum CLI {
         try p.run()
         p.waitUntilExit()
         guard p.terminationStatus == 0 else {
-            throw Failure(description: "could not open meep://\(command) (is Meep installed?)")
+            throw Failure("could not open meep://\(command) (is Meep installed?)")
         }
     }
 
     /// `aec --system <file> --mic <file> -o <out.caf|.wav>`: removes the system audio's echo from
-    /// the mic track (plus low noise suppression). Or `aec <recording-dir> [out]`: redoes a
-    /// recording's mic processing with the settings it was recorded with (session.json); without
-    /// [out] it replaces raw/mic_aec.caf and updates session.json.
+    /// the mic track (plus low noise suppression).
     static func aec(_ args: [String]) throws -> Exit {
-        let a = try Args(args, options: ["--system", "--mic", "-o"], count: 0...2)
-        if a.positional.isEmpty {
-            guard let system = a["--system"], let mic = a["--mic"], let out = a["-o"] else {
-                throw UsageError(message: "aec needs --system <file> --mic <file> -o <out>, or <recording-dir> [out]")
-            }
-            let output = URL(fileURLWithPath: out)
-            try checkExtension(output, MicProcessor.outputExtensions)
-            try runAEC(system: try inputFile(system), mic: try inputFile(mic), output: output)
-            print(output.path)
-            return .ok
+        let a = try Args(args, options: ["--system", "--mic", "-o"])
+        guard let system = a["--system"], let mic = a["--mic"], let out = a["-o"] else {
+            throw UsageError(message: "aec needs --system <file> --mic <file> -o <out>")
         }
-        guard a.values.isEmpty else {
-            throw UsageError(message: "aec takes either <recording-dir> [out] or --system/--mic/-o, not both")
-        }
-        let dir = try recordingDir(a.positional[0])
-        let meta = Finalizer.readMeta(dir)
-        try checkNotBusy(dir, meta)
-        let raw = Finalizer.rawDir(dir)
-        let system = try? firstExisting(raw, [Finalizer.systemPCM, "system.caf"])
-        let mic = try firstExisting(raw, [Finalizer.micPCM, "mic.caf"])
-        // As recorded; a folder without session.json gets the defaults (echo cancellation + low NS).
-        let options = meta.map {
-            Finalizer.micOptions(meta: $0, echoMode: ($0["echo_cancellation"] as? String).flatMap(EchoMode.init) ?? .off,
-                                 hasSystem: system != nil, hasMic: true)
-        } ?? MicProcessor.Options(echoCancellation: system != nil)
-        guard !options.summary.isEmpty else {
-            let apple = (meta?["echo_cancellation"] as? String) == EchoMode.apple.rawValue
-            printErr(apple ? "nothing to do: Apple voice processing already processed this recording's microphone"
-                           : "nothing to do: echo cancellation, noise suppression and auto level are off for this recording")
-            return .ok
-        }
-        if a.positional.count == 2 {
-            let out = URL(fileURLWithPath: a.positional[1])
-            try checkExtension(out, MicProcessor.outputExtensions)
-            try runAEC(system: system, mic: mic, output: out, options: options)
-            print(out.path)
-            return .ok
-        }
-        // The recording's own layout: lossless PCM first, then AAC raw/mic_aec.caf.
-        let pcm = raw.appendingPathComponent(Finalizer.micAECPCM)
-        let out = raw.appendingPathComponent("mic_aec.caf")
-        try runAEC(system: system, mic: mic, output: pcm, options: options)
-        // The PCM goes either way: left behind, remix would prefer it over what session.json says.
-        defer { try? FileManager.default.removeItem(at: pcm) }
-        try Finalizer.writeAtomically(to: out) { temp in
-            try Finalizer.encodeAAC(pcm, to: temp, bitRate: 64_000, progress: progress("encode"))
-        }
-        progressDone()
-        if var meta {
-            var tracks = meta["tracks"] as? [String: [String: Any]] ?? [:]
-            tracks["mic_aec"] = ["file": "\(Finalizer.rawFolder)/mic_aec.caf", "duration_sec": Finalizer.duration(out),
-                                 "format": "AAC 48kHz mono 64kbps, WebRTC " + options.summary]
-            meta["tracks"] = tracks
-            meta["mic_processing"] = options.summary
-            if !Finalizer.writeMeta(meta, to: dir) { printErr("warning: could not update session.json") }
-        }
-        if FileManager.default.fileExists(atPath: dir.appendingPathComponent("mixed.m4a").path) {
-            printErr("mixed.m4a still has the previous microphone track: run remix to update it")
-        }
-        print(out.path)
+        let output = URL(fileURLWithPath: out)
+        try checkExtension(output, MicProcessor.outputExtensions)
+        try runAEC(system: try inputFile(system), mic: try inputFile(mic), output: output)
+        print(output.path)
         return .ok
     }
 
-    /// A recording the app is (or will be) writing: still recording or saving, or left unfinished
-    /// by a crash or quit, which the app finishes on its next launch.
-    private static func checkNotBusy(_ dir: URL, _ meta: [String: Any]?) throws {
-        guard let meta, let status = meta["status"] as? String, ["recording", "saving"].contains(status) else { return }
-        let live = (meta["pid"] as? Int32).map { kill($0, 0) == 0 } ?? false
-        throw Failure(description: live
-            ? "\(dir.path) is still being recorded or saved (status \(status))"
-            : "\(dir.path) is unfinished (status \(status)); open Meep to finish it first")
-    }
-
-    /// `remix <recording-dir> [--json] [-v]`: re-mix a recording's tracks into mixed.m4a and
-    /// update session.json.
+    /// `remix <recording-dir> [--redo-mic] [--json] [-v]`: re-mixes a recording into mixed.m4a.
+    /// --redo-mic first redoes the mic processing with the settings it was recorded with and
+    /// replaces raw/mic_aec.caf. Updates session.json.
     static func remix(_ args: [String]) throws -> Exit {
-        let a = try Args(args, flags: ["--json", "-v"], count: 1...1)
+        let a = try Args(args, flags: ["--redo-mic", "--json", "-v"], count: 1...1)
         let dir = try recordingDir(a.positional[0])
-        let meta = Finalizer.readMeta(dir)
-        try checkNotBusy(dir, meta)
+        let (lock, session) = try own(dir)
+        defer { lock.release() }
+        var meta = session
         let raw = Finalizer.rawDir(dir)
         // Prefer lossless files (present if encoding failed or has not run yet), and the AEC mic.
         let system = try? firstExisting(raw, [Finalizer.systemPCM, "system.caf"])
         let mic = try? firstExisting(raw, [Finalizer.micAECPCM, "mic_aec.caf", Finalizer.micPCM, "mic.caf"])
-        guard system != nil || mic != nil else { throw Failure(description: "no tracks found in \(raw.path)") }
+
+        if a.has("--redo-mic") {
+            let rawMic = try firstExisting(raw, [Finalizer.micPCM, "mic.caf"])
+            let options = meta.micOptions(hasSystem: system != nil, hasMic: true)
+            if options.summary.isEmpty {
+                printErr(meta.echoCancellation == .apple
+                    ? "--redo-mic: Apple voice processing already processed this recording's microphone"
+                    : "--redo-mic: echo cancellation, noise suppression and auto level are off for this recording")
+            } else {
+                // Lossless result, encoded to mic_aec.caf and mixed from; it goes either way.
+                let pcm = raw.appendingPathComponent(Finalizer.micAECPCM)
+                defer { try? FileManager.default.removeItem(at: pcm) }
+                try runAEC(system: system, mic: rawMic, output: pcm, options: options)
+                let out = raw.appendingPathComponent("mic_aec.caf")
+                try Finalizer.writeAtomically(to: out) { temp in
+                    try Finalizer.encodeAAC(pcm, to: temp, bitRate: 64_000, progress: progress("encode"))
+                }
+                progressDone()
+                meta.micProcessing = options.summary
+                meta.tracks.micAec = Session.Track(file: "\(Finalizer.rawFolder)/mic_aec.caf",
+                                                   durationSec: Finalizer.duration(out),
+                                                   format: "AAC 48kHz mono 64kbps, WebRTC " + options.summary)
+                if !meta.write(to: dir) { printErr("warning: could not update session.json") }
+                return try runMix(system: system, mic: pcm, output: dir.appendingPathComponent("mixed.m4a"),
+                                  json: a.has("--json"), verbose: a.has("-v")) { r in
+                    meta.setMix(r)
+                    if !meta.write(to: dir) { printErr("warning: could not update session.json") }
+                }
+            }
+        }
+        guard system != nil || mic != nil else { throw Failure("no tracks found in \(raw.path)") }
         return try runMix(system: system, mic: mic, output: dir.appendingPathComponent("mixed.m4a"),
                           json: a.has("--json"), verbose: a.has("-v")) { r in
-            guard var meta else { return }
-            meta["mixed"] = "mixed.m4a"
-            meta["mix_loudness_lufs"] = r.loudnessLUFS
-            meta["mix_gain_db"] = r.gainsDB
-            if !Finalizer.writeMeta(meta, to: dir) { printErr("warning: could not update session.json") }
+            meta.setMix(r)
+            if !meta.write(to: dir) { printErr("warning: could not update session.json") }
         }
+    }
+
+    /// Takes a recording folder for this command: one the app is no longer recording, saving or
+    /// due to finish. Held until the command ends, so the app can't start processing it meanwhile.
+    private static func own(_ dir: URL) throws -> (SessionLock, Session) {
+        guard Session.read(dir) != nil else {
+            throw Failure("not a Meep recording (no readable \(Finalizer.rawFolder)/session.json): \(dir.path)")
+        }
+        guard let lock = SessionLock(dir) else {
+            throw Failure("\(dir.path) is in use (being recorded, saved, or remixed)")
+        }
+        guard let s = Session.read(dir) else { throw Failure("can't read \(Session.url(dir).path)") }
+        guard !s.status.isUnfinished else {
+            throw Failure("\(dir.path) is unfinished (status \(s.status.rawValue)); open Meep to finish it first")
+        }
+        return (lock, s)
     }
 
     /// `mix [--system <file>] [--mic <file>] -o <out.m4a|.wav|.caf> [--json] [-v]`: loudness-matched mix.
@@ -323,6 +294,13 @@ enum CLI {
         try MicProcessor.process(system: system, mic: mic, output: output, options: options, progress: progress("aec"))
     }
 
+    /// `mix --json` output.
+    private struct MixReport: Encodable {
+        var output: String
+        var loudnessLufs: [String: Double]
+        var gainDb: [String: Double]
+    }
+
     /// Mixes, then prints the output path (or with `json`, a JSON object) on stdout; with
     /// `verbose`, the loudness/gain summary on stderr. `done` runs after a successful mix.
     static func runMix(system: URL?, mic: URL?, output: URL, json: Bool, verbose: Bool,
@@ -335,7 +313,7 @@ enum CLI {
         }
         done(r)
         if json {
-            printJSON(["output": output.path, "loudness_lufs": r.loudnessLUFS, "gain_db": r.gainsDB])
+            JSON.print(MixReport(output: output.path, loudnessLufs: r.loudnessLUFS, gainDb: r.gainsDB))
         } else {
             print(output.path)
             for name in ["system", "mic"] where verbose {
@@ -351,20 +329,20 @@ enum CLI {
         var isDir: ObjCBool = false
         let dir = URL(fileURLWithPath: path, isDirectory: true)
         guard FileManager.default.fileExists(atPath: dir.path, isDirectory: &isDir), isDir.boolValue else {
-            throw Failure(description: "not a directory: \(path)")
+            throw Failure("not a directory: \(path)")
         }
         return dir
     }
 
     static func inputFile(_ path: String) throws -> URL {
-        guard FileManager.default.fileExists(atPath: path) else { throw Failure(description: "no such file: \(path)") }
+        guard FileManager.default.fileExists(atPath: path) else { throw Failure("no such file: \(path)") }
         return URL(fileURLWithPath: path)
     }
 
     static func firstExisting(_ dir: URL, _ names: [String]) throws -> URL {
         guard let u = names.map({ dir.appendingPathComponent($0) })
             .first(where: { FileManager.default.fileExists(atPath: $0.path) }) else {
-            throw Failure(description: "none of \(names.joined(separator: ", ")) in \(dir.path)")
+            throw Failure("none of \(names.joined(separator: ", ")) in \(dir.path)")
         }
         return u
     }
@@ -392,10 +370,6 @@ enum CLI {
 
     static func printErr(_ s: String, newline: Bool = true) {
         FileHandle.standardError.write(Data((newline ? s + "\n" : s).utf8))
-    }
-
-    static func printJSON(_ object: [String: Any]) {
-        print(String(decoding: Finalizer.jsonData(object), as: UTF8.self))
     }
 
     /// The progress line currently on stderr (nil = none). Progress can come from any thread.
@@ -472,4 +446,84 @@ struct Args {
 
     subscript(_ option: String) -> String? { values[option] }
     func has(_ flag: String) -> Bool { flags.contains(flag) }
+}
+
+enum HelpText {
+    static var text: String {
+        let exe = "meep"
+        return """
+        Meep — records system audio + microphone for meetings.
+        CLI: \(Bundle.main.executableURL?.path ?? exe) <command>
+
+        CONTROL (the app must be installed; these launch it if needed)
+          \(exe) start [--wait] [--timeout <sec>]
+              Start recording. --wait: return once it is live and print its folder (timeout 15 s);
+              exit 1 with the reason if the app could not start. Already recording: exit 0.
+          \(exe) stop [--wait] [--timeout <sec>]
+              Stop recording. --wait: return once it is saved and print its folder (timeout 600 s);
+              exit 0 if its status is "complete" or "recovered", 1 otherwise. Not recording: exit 0
+              with nothing on stdout (a start still in flight is stopped, but not waited for).
+              Recordings started or stopped here show no alerts and open no Finder window.
+          \(exe) status [--json]
+              Prints idle, recording or saving. --json: {"state", "current": {...} | null,
+                "latest": {"dir", "mixed", "status", "after_save", ...} | null, "recordings_folder"}
+              status of a recording: recording | saving | complete | recovered | incomplete
+                (a track was lost or recorded nothing) | recovered_after_crash
+          URL scheme: open "meep://start" (also stop, preferences); returns at once.
+              Add ?quiet (meep://start?quiet) for no alerts or Finder window.
+
+        PROCESSING (inputs: .caf .wav .m4a .aac .mp3 .flac .ogg; output format follows the extension)
+          \(exe) aec --system <file> --mic <file> -o <out.caf|.wav>
+              WebRTC echo cancellation (removes the system audio from the mic), plus low noise
+              suppression and a high-pass filter; ignores Preferences. 16-bit PCM.
+          \(exe) mix [--system <file>] [--mic <file>] -o <out.m4a|.wav|.caf> [--json] [-v]
+              Loudness-matched mix: AAC (.m4a) or 16-bit PCM (.wav/.caf).
+              --json: output, loudness and gains as JSON on stdout; -v: loudness and gains on stderr.
+          \(exe) remix <recording-dir> [--redo-mic] [--json] [-v]
+              Re-mix a recording into mixed.m4a and update session.json. --redo-mic: first redo
+              the mic processing with the settings it was recorded with (echo cancellation, noise
+              suppression, auto level), replacing raw/mic_aec.caf.
+          Outputs are written to a temporary file first and replace the target only on success.
+          remix refuses a recording that is still being recorded, saved, or unfinished.
+
+        OTHER
+          \(exe) login-item on|off|status      Start at Login; prints on or off
+          \(exe) version                       e.g. \(AppInfo.version)
+          \(exe) help
+
+        CONVENTIONS
+          stdout carries only results (a path, a word, or JSON); messages and progress go to stderr.
+          Exit codes: 0 ok, 1 failed, 2 bad usage, 3 timed out.
+
+        OUTPUT  \(RecordingSession.rootDirectory.path)/<yyyy-MM-dd_HHmmss>/
+          mixed.m4a          system audio + microphone, loudness-matched
+          raw/system.caf     what the Mac played (other participants)
+          raw/mic.caf        microphone (you)
+          raw/mic_aec.caf    microphone after WebRTC post-processing: echo cancellation,
+                             noise suppression, auto level (what ran: mic_processing in session.json)
+          raw/session.json   status, timing, interruptions, warnings
+          raw/after-save.json  state of the Run After Saving command
+          All tracks start at the same moment: sample N of every file is the same instant.
+          Folder: Preferences › General › Recordings Folder, i.e.
+            defaults write dev.junyi.Meep recordingsFolder -string <path>
+
+        AFTER SAVING
+          Preferences › Agent › Run After Saving: a shell command run after each recording is saved,
+          with the recording folder as $1 and $MEEP_DIR. Output: raw/after-save.log.
+          raw/after-save.json: {"status": "running|done|failed", "exit_status", ...}.
+          Runs via zsh -lc: ~/.zprofile is read, ~/.zshrc is not (set PATH there or use full paths).
+
+        SETTINGS (defaults write dev.junyi.Meep <key> <value>; Preferences sets the same)
+          inputDeviceUID -string <uid>|""     microphone; "" = system default
+          recordSystemAudio -bool true|false   record what the Mac plays
+          echoCancellation -string webrtc|apple|off
+          noiseSuppression -string off|low|moderate|high|very_high
+          autoLevel -bool true|false
+          recordingsFolder -string <path>
+          afterSaveCommand -string <command>
+          openFolderAfterSaving -bool true|false
+          SUEnableAutomaticChecks -bool true|false, SUScheduledCheckInterval -int <seconds>
+                                               automatic update check (Sparkle)
+        """
+    }
 }

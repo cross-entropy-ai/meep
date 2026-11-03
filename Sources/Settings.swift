@@ -1,13 +1,13 @@
 import AppKit
 import ServiceManagement
 
-enum EchoMode: String, CaseIterable {
+enum EchoMode: String, CaseIterable, Codable {
     case off, apple, webrtc
 }
 
 /// Mic noise suppression strength (WebRTC), applied after recording; skipped if Apple voice
 /// processing ran.
-enum NoiseSuppression: String, CaseIterable {
+enum NoiseSuppression: String, CaseIterable, Codable {
     case off, low, moderate, high
     case veryHigh = "very_high"
 
@@ -43,19 +43,6 @@ enum UpdateCheck: String, CaseIterable {
 enum AppSettings {
     private static var d: UserDefaults { .standard }
 
-    /// Earlier bundle ids: com.junyi.Meep (1.0.0–1.0.1) and com.junyi.MeetingRecorder (before 1.0).
-    /// Copies the newest of those settings once, if this domain has none yet; the old domains
-    /// are left as they are.
-    static func migrateFromOldDomains() {
-        guard let id = Bundle.main.bundleIdentifier, d.persistentDomain(forName: id)?.isEmpty ?? true else { return }
-        for name in ["com.junyi.Meep", "com.junyi.MeetingRecorder"] {
-            if let old = d.persistentDomain(forName: name), !old.isEmpty {
-                d.setPersistentDomain(old, forName: id)
-                return
-            }
-        }
-    }
-
     /// UserDefaults keys of the settings Preferences shows (also used by its @AppStorage).
     enum Key {
         static let echoCancellation = "echoCancellation"
@@ -84,16 +71,10 @@ enum AppSettings {
         static let updateCheck = UpdateCheck.weekly
     }
 
-    /// Where recordings are saved: $MEEP_ROOT, else the `recordingsFolder` default
-    /// (a path, `~` expanded), else ~/Documents/MeepRecordings. Set in Preferences › General,
-    /// or `defaults write dev.junyi.Meep recordingsFolder -string ~/Meetings`
+    /// Where recordings are saved: the `recordingsFolder` default (a path, `~` expanded), else
+    /// ~/Documents/MeepRecordings. Set in Preferences › General, or
+    /// `defaults write dev.junyi.Meep recordingsFolder -string ~/Meetings`
     static var recordingsFolder: URL {
-        folder(ProcessInfo.processInfo.environment["MEEP_ROOT"]) ?? appRecordingsFolder
-    }
-
-    /// The folder the app uses: the setting, else the default ($MEEP_ROOT never reaches
-    /// an app launched through LaunchServices).
-    static var appRecordingsFolder: URL {
         folder(d.string(forKey: Key.recordingsFolder)) ?? defaultRecordingsFolder
     }
 
@@ -105,12 +86,6 @@ enum AppSettings {
     static var defaultRecordingsFolder: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Documents/MeepRecordings", isDirectory: true)
-    }
-
-    /// $MEEP_ROOT wins over the setting, so Preferences can't change the folder then.
-    static var recordingsFolderFromEnvironment: Bool {
-        !(ProcessInfo.processInfo.environment["MEEP_ROOT"] ?? "")
-            .trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     static func setRecordingsFolder(_ url: URL) {

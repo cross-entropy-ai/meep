@@ -23,21 +23,14 @@ import Foundation
 /// caller through (`stopLock` + the `stopped` flag, set on `control`); the stop results it fills
 /// in are read only after it returns.
 final class RecordingSession: @unchecked Sendable {
-    enum Track: String { case mic, system }
-
-    struct Interruption {
-        let track: Track
-        let reason: String
-        let detectedAt: Double
-        var recoveredAt: Double?
-        var attempts = 0
-        var device: String?
-        var lastError: String?
-    }
+    enum Track: String, Codable { case mic, system }
+    typealias Interruption = Session.Interruption
 
     enum Health: Equatable { case ok, recovering(Track), lost(Track) }
 
     let directory: URL
+    /// Held from creation until processing is done (released by `process`).
+    private var lock: SessionLock?
     let startedAt = Date()
     /// Started from a script (`?quiet`): no alerts or Finder window for it. Main thread only.
     var quiet = false
@@ -83,7 +76,7 @@ final class RecordingSession: @unchecked Sendable {
     static let systemStallSeconds = 5.0
     static let lostAfterAttempts = 3
 
-    /// See AppSettings.recordingsFolder ($MEEP_ROOT, `recordingsFolder` default).
+    /// See AppSettings.recordingsFolder (the `recordingsFolder` default).
     static var rootDirectory: URL { AppSettings.recordingsFolder }
 
     /// Opens the recordings folder in Finder (creating it if needed).
@@ -110,6 +103,8 @@ final class RecordingSession: @unchecked Sendable {
         }
         directory = dir
         try FileManager.default.createDirectory(at: Finalizer.rawDir(directory), withIntermediateDirectories: true)
+        guard let lock = SessionLock(dir) else { throw CAError(what: "can't lock \(dir.path)", status: -1) }
+        self.lock = lock
     }
 
     private var systemPCM: URL { Finalizer.rawDir(directory).appendingPathComponent(Finalizer.systemPCM) }
@@ -124,6 +119,8 @@ final class RecordingSession: @unchecked Sendable {
         do {
             try startCapture()
         } catch {
+            lock?.release()
+            lock = nil
             try? FileManager.default.removeItem(at: directory)
             throw error
         }
@@ -168,7 +165,7 @@ final class RecordingSession: @unchecked Sendable {
             kAudioHardwarePropertyDevices,
         ]) { [weak self] sel in self?.hardwareChanged(sel) }
 
-        control.sync { writeMeta(status: "recording") }
+        control.sync { writeMeta(status: .recording) }
 
         let t = DispatchSource.makeTimerSource(queue: control)
         t.schedule(deadline: .now() + 1, repeating: 1)
@@ -193,11 +190,12 @@ final class RecordingSession: @unchecked Sendable {
     /// minutes for a long meeting; a new recording may already be running meanwhile.
     /// Returns warnings to show the user. Blocking; call off the main thread.
     func process(progress: ((Double) -> Void)? = nil) -> [String] {
-        Finalizer.finalize(dir: directory, meta: finalMeta, echoMode: echoMode,
-                           captured: captured, progress: progress)
+        defer { lock?.release(); lock = nil }
+        guard let final = finalSession else { return [] }
+        return Finalizer.finalize(dir: directory, session: final, captured: captured, progress: progress)
     }
 
-    private var finalMeta: [String: Any] = [:]
+    private var finalSession: Session?
     private var captured = (system: false, mic: false)
 
     /// Stops capture and closes the PCM files. Fast. Leaves session.json at status "saving" with
@@ -218,7 +216,7 @@ final class RecordingSession: @unchecked Sendable {
             listener?.cancel(); listener = nil
             system?.stop(); system = nil
             mic?.stop(); mic = nil
-            writeMeta(status: "saving")  // visible to `status` while post-processing runs
+            writeMeta(status: .saving)  // visible to `status` while post-processing runs
         }
         systemWriter?.finish(at: stopHost)
         micWriter?.finish(at: stopHost)
@@ -244,59 +242,42 @@ final class RecordingSession: @unchecked Sendable {
         if micMissing { warnings.append(tr("The microphone recorded nothing. Check the input device.")) }
         if long && recordSystem && !hasSys { silenceWarnings.append(tr("System audio recorded nothing.")) }
         warnings += silenceWarnings
-        for i in interruptions where i.recoveredAt == nil {
+        for i in interruptions where i.recoveredAtSec == nil {
             warnings.append(i.track == .mic
-                ? tr("Microphone stopped at %1$@ and could not be restored (%2$@).", Self.clock(i.detectedAt), i.reason)
-                : tr("System audio stopped at %1$@ and could not be restored (%2$@).", Self.clock(i.detectedAt), i.reason))
+                ? tr("Microphone stopped at %1$@ and could not be restored (%2$@).", Self.clock(i.detectedAtSec), i.reason)
+                : tr("System audio stopped at %1$@ and could not be restored (%2$@).", Self.clock(i.detectedAtSec), i.reason))
         }
 
-        let status = interruptions.contains { $0.recoveredAt == nil } || micMissing ? "incomplete"
-            : (interruptions.isEmpty ? "complete" : "recovered")
-        var meta = baseMeta(status: status)
-        meta["stopped_at"] = ISO8601DateFormatter().string(from: stoppedAt)
-        meta["duration_sec"] = duration
-        meta["tracks"] = [
-            "system": recordSystem ? ["peak": systemWriter?.peak ?? 0] : ["enabled": false],
-            "mic": recordMic ? ["peak": micWriter?.peak ?? 0,
-                                "processing": micVoiceProcessing ? "Apple voice processing" : "none"]
-                             : ["enabled": false],
-        ]
-        meta["warnings"] = warnings
-        meta["status"] = "saving"
-        meta["final_status"] = status  // Finalizer sets it as status when processing is done
-        Finalizer.writeMeta(meta, to: directory)
-        finalMeta = meta
+        let status: Session.Status = interruptions.contains { $0.recoveredAtSec == nil } || micMissing ? .incomplete
+            : (interruptions.isEmpty ? .complete : .recovered)
+        var meta = session(status: .saving)
+        meta.finalStatus = status  // Finalizer sets it as status when processing is done
+        meta.stoppedAt = stoppedAt
+        meta.durationSec = duration
+        meta.tracks.system.peak = recordSystem ? systemWriter?.peak ?? 0 : nil
+        meta.tracks.mic.peak = recordMic ? micWriter?.peak ?? 0 : nil
+        meta.warnings = warnings
+        meta.write(to: directory)
+        finalSession = meta
         captured = (hasSys, hasMic)
     }
 
     /// Metadata known during capture. Written at start and on every interruption change, so a
     /// crash leaves enough behind for Finalizer.recoverUnfinished().
-    private func baseMeta(status: String) -> [String: Any] {
-        [
-            "schema_version": 2,
-            "pid": getpid(),  // lets crash recovery tell a dead capture from a live one
-            "started_at": ISO8601DateFormatter().string(from: startedAt),
-            "status": status,
-            "echo_cancellation": echoMode.rawValue,
-            "system_audio": recordSystem,
-            "microphone": recordMic,
-            "noise_suppression": noiseSuppression.rawValue,
-            "auto_level": autoLevel,
-            "mic_voice_processing": micVoiceProcessing,
-            "mic_device": micDeviceName ?? NSNull(),
-            "alignment": "all tracks start at session start; no offsets needed",
-            "interruptions": interruptions.map { i -> [String: Any] in
-                [
-                    "track": i.track.rawValue, "reason": i.reason,
-                    "detected_at_sec": i.detectedAt, "recovered_at_sec": i.recoveredAt ?? NSNull(),
-                    "attempts": i.attempts, "device": i.device ?? NSNull(), "last_error": i.lastError ?? NSNull(),
-                ]
-            },
-        ]
+    private func session(status: Session.Status) -> Session {
+        var s = Session(status: status, startedAt: startedAt, echoCancellation: echoMode,
+                        systemAudio: recordSystem, microphone: recordMic,
+                        noiseSuppression: noiseSuppression, autoLevel: autoLevel)
+        s.micVoiceProcessing = micVoiceProcessing
+        s.micDevice = micDeviceName
+        s.interruptions = interruptions
+        s.tracks.system.enabled = recordSystem
+        s.tracks.mic.enabled = recordMic
+        return s
     }
 
-    private func writeMeta(status: String) {
-        Finalizer.writeMeta(baseMeta(status: status), to: directory)
+    private func writeMeta(status: Session.Status) {
+        session(status: status).write(to: directory)
     }
 
     private func endActivity() {
@@ -342,9 +323,9 @@ final class RecordingSession: @unchecked Sendable {
 
     private func beginInterruption(_ track: Track, reason: String) {
         if openInterruption[track] == nil {
-            interruptions.append(Interruption(track: track, reason: reason, detectedAt: now()))
+            interruptions.append(Interruption(track: track, reason: reason, detectedAtSec: now()))
             openInterruption[track] = interruptions.count - 1
-            if !stopped { writeMeta(status: "recording") }
+            if !stopped { writeMeta(status: .recording) }
         }
     }
 
@@ -389,12 +370,12 @@ final class RecordingSession: @unchecked Sendable {
                 closeInterruption(track)
             }
         }
-        writeMeta(status: "recording")
+        writeMeta(status: .recording)
     }
 
     private func closeInterruption(_ track: Track) {
         guard let idx = openInterruption[track] else { return }
-        interruptions[idx].recoveredAt = now()
+        interruptions[idx].recoveredAtSec = now()
         openInterruption[track] = nil
         nextRetry[track] = nil
     }
@@ -452,7 +433,7 @@ final class RecordingSession: @unchecked Sendable {
         // A restarted mic counts as recovered once audio arrives.
         if openInterruption[.mic] != nil, let m = mic, m.lastCallbackHost > 0 {
             closeInterruption(.mic)
-            writeMeta(status: "recording")
+            writeMeta(status: .recording)
         }
         // Retry tracks that are down (or restarted but still silent).
         for track in [Track.mic, .system] {

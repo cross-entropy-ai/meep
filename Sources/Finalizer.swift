@@ -30,15 +30,14 @@ enum Finalizer {
         static let aec = 11.6, mix = 5.0, encodeSystem = 2.5, encodeMic = 1.5, encodeMicAEC = 1.5
     }
 
-    /// Processes `dir`, merges results into `meta`, writes session.json. Returns warnings.
-    /// `captured`: whether each track actually recorded audio (nil = unknown, e.g. crash recovery:
-    /// then any non-empty file counts). `progress` gets 0...1, from the calling thread.
+    /// Processes `dir`, merges results into `session`, writes session.json. Returns warnings.
+    /// The caller holds the session's lock. `captured`: whether each track actually recorded
+    /// audio (nil = unknown, e.g. crash recovery: then any non-empty file counts). `progress` gets
+    /// 0...1, from the calling thread.
     @discardableResult
-    static func finalize(dir: URL, meta inMeta: [String: Any], echoMode: EchoMode,
-                         captured: (system: Bool, mic: Bool)? = nil,
+    static func finalize(dir: URL, session: Session, captured: (system: Bool, mic: Bool)? = nil,
                          progress: ((Double) -> Void)? = nil) -> [String] {
-        var meta = inMeta
-        var warnings = (meta["warnings"] as? [String]) ?? []
+        var meta = session
         let raw = rawDir(dir)
         removePartialFiles(in: [dir, raw])  // left by a run that was killed mid-write
         let f = { (name: String) in raw.appendingPathComponent(name) }
@@ -47,10 +46,9 @@ enum Finalizer {
         let hasMic = captured?.mic ?? hasAudio(micPCM)
         let exists = { (u: URL) in FileManager.default.fileExists(atPath: u.path) }
         // Resuming after AEC + mix completed: only the encoding is left.
-        let processing = meta["processing"] as? [String: Any]
-        let resumeEncoding = processing?["stage"] as? String == "encoding"
+        let resumeEncoding = meta.processing != nil
 
-        let options = micOptions(meta: meta, echoMode: echoMode, hasSystem: hasSys, hasMic: hasMic)
+        let options = meta.micOptions(hasSystem: hasSys, hasMic: hasMic)
 
         // Progress: each step owns a slice of 0...1 sized by its cost.
         let runAEC = !resumeEncoding && hasMic && !options.summary.isEmpty
@@ -69,100 +67,96 @@ enum Finalizer {
 
         // 1. Mic processing (echo cancellation / noise suppression / auto level as set), on the
         //    lossless capture, to lossless PCM.
-        var aec = processing?["aec"] as? Bool ?? false
+        var aec = meta.processing?.aec ?? false
         if runAEC {
             do {
                 try MicProcessor.process(system: hasSys ? sysPCM : nil, mic: micPCM, output: aecPCM,
                                          options: options, progress: step(Cost.aec))
                 aec = true
-                meta["mic_processing"] = options.summary
+                meta.micProcessing = options.summary
             } catch {
-                warnings.append(tr("Microphone processing failed (the mix uses the raw mic track): ") + "\(error)")
+                meta.warnings.append(tr("Microphone processing failed (the mix uses the raw mic track): ") + "\(error)")
             }
         }
 
         // 2. Loudness-matched mix, from lossless inputs only.
-        if !resumeEncoding { meta["mixed"] = NSNull() }
+        if !resumeEncoding { meta.mixed = nil }
         if runMix {
             do {
                 let info = try Mixer.mix(system: hasSys ? sysPCM : nil,
                                          mic: hasMic ? (aec ? aecPCM : micPCM) : nil,
                                          output: dir.appendingPathComponent("mixed.m4a"),
                                          progress: step(Cost.mix))
-                meta["mixed"] = "mixed.m4a"
-                meta["mix_loudness_lufs"] = info.loudnessLUFS
-                meta["mix_gain_db"] = info.gainsDB
+                meta.setMix(info)
             } catch {
-                warnings.append(tr("Mixing failed (the tracks are kept): ") + "\(error)")
+                meta.warnings.append(tr("Mixing failed (the tracks are kept): ") + "\(error)")
             }
         }
 
         // Checkpoint: from here on, a recovery only re-runs the encoding below.
         // Quit mid-way: steps may have failed only because they were killed; don't record them.
-        if Subprocesses.isQuitting { return warnings }
+        if Subprocesses.isQuitting { return meta.warnings }
         if !resumeEncoding {
-            meta["processing"] = ["stage": "encoding", "aec": aec]
-            meta["warnings"] = warnings
-            meta["status"] = "saving"  // still unfinished: recoverUnfinished picks it up
-            writeMeta(meta, to: dir)
+            meta.processing = Session.Processing(aec: aec)
+            meta.status = .saving  // still unfinished: recoverUnfinished picks it up
+            meta.write(to: dir)
         }
 
         // 3. Encode tracks to AAC; drop the PCM only when the AAC file checks out.
         if !aec { try? FileManager.default.removeItem(at: aecPCM) }  // partial output of a failed AEC
-        var tracks = (meta["tracks"] as? [String: [String: Any]]) ?? [:]
-        for (key, pcm, out, bitRate, has, cost) in [("system", sysPCM, f("system.caf"), 128_000, hasSys, Cost.encodeSystem),
-                                                    ("mic", micPCM, f("mic.caf"), 64_000, hasMic, Cost.encodeMic),
-                                                    ("mic_aec", aecPCM, f("mic_aec.caf"), 64_000, aec, Cost.encodeMicAEC)] {
-            var t = tracks[key] ?? [:]
-            let note = key == "mic_aec" ? ", WebRTC " + (meta["mic_processing"] as? String ?? "AEC3") : ""
+        let note = ", WebRTC " + (meta.micProcessing ?? "AEC3")
+        let steps: [(String, WritableKeyPath<Session.Tracks, Session.Track>, URL, URL, Int, Bool, Double)] = [
+            ("system", \.system, sysPCM, f("system.caf"), 128_000, hasSys, Cost.encodeSystem),
+            ("mic", \.mic, micPCM, f("mic.caf"), 64_000, hasMic, Cost.encodeMic),
+            ("mic_aec", \.micAec, aecPCM, f("mic_aec.caf"), 64_000, aec, Cost.encodeMicAEC)]
+        for (name, key, pcm, out, bitRate, has, cost) in steps {
+            let isAEC = name == "mic_aec"
+            var t = meta.tracks[keyPath: key]
+            let format = "AAC 48kHz \(name == "system" ? "stereo" : "mono") \(bitRate / 1000)kbps" + (isAEC ? note : "")
+            defer { meta.tracks[keyPath: key] = t }
             let encodeProgress = exists(pcm) ? step(cost) : { _ in }
-            if !exists(pcm), exists(out), key != "mic_aec" || aec {
-                t["file"] = "\(rawFolder)/\(out.lastPathComponent)"  // encoded before a crash
-                t["duration_sec"] = duration(out)
-                t["format"] = "AAC 48kHz \(key == "system" ? "stereo" : "mono") \(bitRate / 1000)kbps" + note
-                tracks[key] = t
+            if !exists(pcm), exists(out), !isAEC || aec {
+                t.file = "\(rawFolder)/\(out.lastPathComponent)"  // encoded before a crash
+                t.durationSec = duration(out)
+                t.format = format
                 continue
             }
-            t["duration_sec"] = duration(pcm)
+            t.durationSec = duration(pcm)
             // mic_aec is derived, not captured: without a successful AEC there is nothing to keep.
-            if key == "mic_aec" && !aec {
-                t["file"] = NSNull()
-                t["format"] = NSNull()
-                tracks[key] = t
+            if isAEC && !aec {
+                t.file = nil
+                t.format = nil
                 continue
             }
             // Never discard captured data on a heuristic: anything on disk gets encoded.
             guard has || duration(pcm) > 0 else {
-                t["file"] = NSNull()
+                t.file = nil
                 try? FileManager.default.removeItem(at: pcm)
-                tracks[key] = t
                 continue
             }
-            if !has { t["note"] = "no audio was captured on this track (silence only)" }
+            if !has { t.note = "no audio was captured on this track (silence only)" }
             do {
                 try encodeAAC(pcm, to: out, bitRate: bitRate, progress: encodeProgress)
-                t["file"] = "\(rawFolder)/\(out.lastPathComponent)"
-                t["format"] = "AAC 48kHz \(key == "system" ? "stereo" : "mono") \(bitRate / 1000)kbps" + note
-                if Subprocesses.isQuitting { return warnings }  // leave it for the next launch
+                t.file = "\(rawFolder)/\(out.lastPathComponent)"
+                t.format = format
+                if Subprocesses.isQuitting { return meta.warnings }  // leave it for the next launch
                 try? FileManager.default.removeItem(at: pcm)
             } catch {
-                t["file"] = "\(rawFolder)/\(pcm.lastPathComponent)"  // keep the lossless file
-                t["format"] = "PCM 16-bit 48kHz" + note
-                warnings.append(tr("%@: AAC encoding failed, kept the PCM file: ", key) + "\(error)")
+                t.file = "\(rawFolder)/\(pcm.lastPathComponent)"  // keep the lossless file
+                t.format = "PCM 16-bit 48kHz" + (isAEC ? note : "")
+                meta.warnings.append(tr("%@: AAC encoding failed, kept the PCM file: ", name) + "\(error)")
             }
-            tracks[key] = t
         }
 
-        meta["tracks"] = tracks
-        meta["warnings"] = warnings
-        meta.removeValue(forKey: "processing")
+        meta.processing = nil
         // Quit mid-way: steps may have failed only because they were killed. Keep status
         // "saving" so the next launch redoes the processing from the PCM files.
-        if Subprocesses.isQuitting { return warnings }
-        meta["status"] = meta.removeValue(forKey: "final_status") ?? "complete"
-        writeMeta(meta, to: dir)
+        if Subprocesses.isQuitting { return meta.warnings }
+        meta.status = meta.finalStatus ?? .complete
+        meta.finalStatus = nil
+        meta.write(to: dir)
         progress?(1)
-        return warnings
+        return meta.warnings
     }
 
     /// Finds sessions left unfinished and finalizes them: capture cut off by a crash or force quit
@@ -171,60 +165,29 @@ enum Finalizer {
     static func recoverUnfinished(root: URL, progress: ((Double) -> Void)? = nil) -> [URL] {
         let dirs = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
         var done: [URL] = []
-        for dir in dirs {
-            guard var meta = readMeta(dir), ["recording", "saving"].contains(meta["status"] as? String ?? "") else { continue }
-            // Skip a recording whose process is alive: another running instance, or this one
-            // (a recording that started while recovery was listing the folder).
-            if let pid = meta["pid"] as? Int32, kill(pid, 0) == 0 { continue }
-            // From here this process owns it: the CLI then sees it busy (aec/remix refuse it).
-            meta["pid"] = getpid()
-            writeMeta(meta, to: dir)
-            let mode = (meta["echo_cancellation"] as? String).flatMap(EchoMode.init(rawValue:)) ?? .off
-            if meta["status"] as? String == "saving", meta["final_status"] != nil {
+        for dir in dirs where Session.read(dir)?.status.isUnfinished ?? false {
+            // Owned by a live process (another instance, or a recording this one just started): skip.
+            guard let lock = SessionLock(dir) else { continue }
+            defer { lock.release() }
+            guard var meta = Session.read(dir), meta.status.isUnfinished else { continue }  // finished meanwhile
+            if meta.status == .saving, meta.finalStatus != nil {
                 // Capture ended cleanly; only processing was interrupted. The metadata is complete.
-                meta["processing_resumed_at"] = ISO8601DateFormatter().string(from: Date())
-                finalize(dir: dir, meta: meta, echoMode: mode, progress: progress)
-                done.append(dir)
-                continue
+                meta.processingResumedAt = Date()
+            } else {
+                let raw = rawDir(dir)
+                let dur = max(duration(raw.appendingPathComponent(systemPCM)), duration(raw.appendingPathComponent(micPCM)))
+                meta.status = .saving
+                meta.finalStatus = .recoveredAfterCrash
+                meta.durationSec = dur
+                meta.warnings.append(tr("The app quit unexpectedly while recording; recovered about %@ s from the capture files.", Int(dur)))
             }
-            let raw = rawDir(dir)
-            let dur = max(duration(raw.appendingPathComponent(systemPCM)), duration(raw.appendingPathComponent(micPCM)))
-            meta["status"] = "saving"
-            meta["final_status"] = "recovered_after_crash"
-            meta["duration_sec"] = dur
-            var w = (meta["warnings"] as? [String]) ?? []
-            w.append(tr("The app quit unexpectedly while recording; recovered about %@ s from the capture files.", Int(dur)))
-            meta["warnings"] = w
-            finalize(dir: dir, meta: meta, echoMode: mode, progress: progress)
+            finalize(dir: dir, session: meta, progress: progress)
             done.append(dir)
         }
         return done
     }
 
     // MARK: - Helpers
-
-    /// Mic processing for a recording, from the settings stored at recording time (older
-    /// sessions: low noise suppression with echo cancellation, as before). Apple voice processing
-    /// already did its own noise suppression and gain. Also used by `aec <recording-dir>`.
-    static func micOptions(meta: [String: Any], echoMode: EchoMode, hasSystem: Bool, hasMic: Bool)
-        -> MicProcessor.Options {
-        // Older sessions only have tracks.mic.processing, and only after a clean stop.
-        let tracks = meta["tracks"] as? [String: [String: Any]]
-        let appleProcessed = echoMode == .apple && (meta["mic_voice_processing"] as? Bool
-            ?? ((tracks?["mic"]?["processing"] as? String ?? "Apple voice processing") != "none"))
-        var options = MicProcessor.Options(
-            echoCancellation: echoMode == .webrtc && hasSystem && hasMic,
-            noiseSuppression: (meta["noise_suppression"] as? String).flatMap(NoiseSuppression.init(rawValue:)) ?? .low,
-            autoLevel: meta["auto_level"] as? Bool ?? false)
-        if appleProcessed { options.noiseSuppression = .off; options.autoLevel = false }
-        if !options.echoCancellation && meta["noise_suppression"] == nil { options.noiseSuppression = .off }
-        return options
-    }
-
-    static func readMeta(_ dir: URL) -> [String: Any]? {
-        guard let data = try? Data(contentsOf: rawDir(dir).appendingPathComponent("session.json")) else { return nil }
-        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-    }
 
     /// Writes `output` via a hidden temporary file next to it (same extension, which picks the
     /// format) that replaces it only when `write` succeeded: an interrupted run never leaves a
@@ -257,26 +220,6 @@ enum Finalizer {
             where name.hasPrefix(".") && name.contains(partialMarker) {
                 try? fm.removeItem(at: dir.appendingPathComponent(name))
             }
-        }
-    }
-
-    /// Pretty, key-sorted JSON (session.json and CLI output).
-    static func jsonData(_ object: Any) -> Data {
-        (try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]))
-            ?? Data("{}".utf8)
-    }
-
-    /// Returns false (and logs) if session.json could not be written, e.g. a full disk.
-    @discardableResult
-    static func writeMeta(_ meta: [String: Any], to dir: URL) -> Bool {
-        let raw = rawDir(dir)
-        do {
-            try FileManager.default.createDirectory(at: raw, withIntermediateDirectories: true)
-            try jsonData(meta).write(to: raw.appendingPathComponent("session.json"), options: .atomic)
-            return true
-        } catch {
-            NSLog("Meep: can't write %@/session.json: %@", raw.path, "\(error)")
-            return false
         }
     }
 

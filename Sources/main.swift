@@ -10,26 +10,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var prefsItem: NSMenuItem!
     private var updateItem: NSMenuItem!
     private var quitItem: NSMenuItem!
-    private var session: RecordingSession?
     private var timer: Timer?
-    private var starting = false
-    /// Capture is being stopped (brief); processing of stopped recordings is counted by `saving`.
-    private var stopping = false
-    /// Stopped recordings still being processed (echo cancellation, mix, encoding).
-    private var saving = 0
+
+    /// The current recording. Stopped recordings are processed separately (`saving`), so the
+    /// next one can start meanwhile.
+    private enum Capture {
+        case idle
+        /// Permission prompts and starting the capture; can take a while.
+        case starting
+        case recording(RecordingSession)
+        /// Closing the capture files (brief).
+        case stopping(RecordingSession)
+
+        var session: RecordingSession? {
+            switch self {
+            case .recording(let s), .stopping(let s): s
+            case .idle, .starting: nil
+            }
+        }
+        /// Starting or stopping: a new request waits in `pending`.
+        var isBusy: Bool {
+            switch self {
+            case .starting, .stopping: true
+            case .idle, .recording: false
+            }
+        }
+        /// Where it ends up once the current start/stop is done.
+        var isOn: Bool {
+            switch self {
+            case .starting, .recording: true
+            case .idle, .stopping: false
+            }
+        }
+    }
+    private var capture = Capture.idle
     /// Start (true) or stop (false) asked for while starting or stopping; applied when that ends,
     /// so a quick `stop` + `start` from a script or the hotkey is not lost.
-    private var pendingRecording: Bool?
-    private var pendingQuiet = false
+    private var pending: (recording: Bool, quiet: Bool)?
+    /// Stopped recordings still being processed (echo cancellation, mix, encoding).
+    private var saving = 0
+    /// Finishing recordings left unfinished last time (at launch).
+    private var recoveringPrevious = false
     /// Processing progress 0...1 (after Stop, or finishing an unfinished recording at launch).
     private var progress: Double?
-    private var recoveringPrevious = false
     private var progressItem: NSMenuItem!
     private let progressBar = NSProgressIndicator()
     private var launched = false
-    private var pendingCommand: (command: String, quiet: Bool)?
-    /// Launched by a quiet URL (the CLI): no alert about recovered recordings either.
-    private var launchedQuietly = false
+    /// A URL command received before launch finished; run once it has.
+    private var queuedCommand: (command: String, quiet: Bool)?
     private let appState = AppState()
     private lazy var preferences = PreferencesWindowController(state: appState)
 
@@ -76,7 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quitItem = NSMenuItem(title: "", action: #selector(quit), keyEquivalent: "q")
         menu.addItem(quitItem)
         statusItem.menu = menu
-        appState.onInputDeviceChange = { [weak self] in self?.session?.inputDeviceSettingChanged() }
+        appState.onInputDeviceChange = { [weak self] in self?.capture.session?.inputDeviceSettingChanged() }
         appState.onChange = { [weak self] in
             self?.updateUI()
             self?.preferences.relabel()  // tab names follow the language setting
@@ -93,10 +121,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appState.updates.start()
 
         launched = true
-        launchedQuietly = pendingCommand?.quiet ?? false
-        recoverUnfinishedSessions()
-        if let cmd = pendingCommand {
-            pendingCommand = nil
+        // Launched by a quiet URL (the CLI): no alert about recovered recordings either.
+        recoverUnfinishedSessions(quiet: queuedCommand?.quiet ?? false)
+        if let cmd = queuedCommand {
+            queuedCommand = nil
             run(command: cmd.command, quiet: cmd.quiet)
         } else {
             Task { await askForAccess() }
@@ -122,7 +150,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Finishes recordings left unfinished by a crash, or by Quit / shutdown during processing.
-    private func recoverUnfinishedSessions() {
+    private func recoverUnfinishedSessions(quiet: Bool) {
         let root = RecordingSession.rootDirectory
         let report = progressReporter(recovering: true)
         Task {
@@ -134,7 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             recoveringPrevious = false
             if saving == 0 { progress = nil }
             updateUI()
-            guard !dirs.isEmpty, !launchedQuietly else { return }
+            guard !dirs.isEmpty, !quiet else { return }
             alert(tr("Finished unfinished recordings"),
                   tr("These recordings were not finished last time (the app quit or the Mac shut down). They are processed and saved now:") + "\n\n"
                   + dirs.map(\.lastPathComponent).joined(separator: "\n"))
@@ -168,7 +196,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let command = host + (url.path.hasSuffix("/") ? String(url.path.dropLast()) : url.path)
         let quiet = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
             .contains { $0.name == "quiet" } ?? false
-        if launched { run(command: command, quiet: quiet) } else { pendingCommand = (command, quiet) }
+        if launched { run(command: command, quiet: quiet) } else { queuedCommand = (command, quiet) }
     }
 
     private func run(command host: String, quiet: Bool) {
@@ -186,28 +214,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func toggle() {
         // While busy, toggle relative to where the current start/stop (or a pending one) ends up.
-        let expected = pendingRecording ?? (starting || (session != nil && !stopping))
-        request(recording: !expected)
+        request(recording: !(pending?.recording ?? capture.isOn))
     }
 
     private func request(recording want: Bool, quiet: Bool = false) {
-        if starting || stopping {
-            pendingRecording = want
-            pendingQuiet = quiet
+        if capture.isBusy {
+            pending = (want, quiet)
             return
         }
-        pendingRecording = nil  // acting now supersedes anything queued
-        if want, session == nil { start(quiet: quiet) } else if !want, let s = session { stop(s, quiet: quiet) }
+        pending = nil  // acting now supersedes anything queued
+        switch capture {
+        case .idle where want: start(quiet: quiet)
+        case .recording(let s) where !want: stop(s, quiet: quiet)
+        default: break
+        }
     }
 
     private func applyPendingRequest() {
-        guard let want = pendingRecording else { return }
-        pendingRecording = nil
-        request(recording: want, quiet: pendingQuiet)
+        guard let p = pending else { return }
+        pending = nil
+        request(recording: p.recording, quiet: p.quiet)
     }
 
     private func start(quiet: Bool) {
-        starting = true  // the permission prompt can take a while
+        capture = .starting
         Task {
             let micAllowed = await micPermission()
             if AppSettings.recordSystemAudio { await systemAudioPermission() }
@@ -219,14 +249,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     let s = try RecordingSession()
                     s.quiet = quiet
                     try s.start()
-                    session = s
+                    capture = .recording(s)
                     startTimer()
                 } catch {
                     failure = (error as? CAError)?.description ?? error.localizedDescription
                 }
             }
-            if let failure { StartFailure.record(failure) }  // for `start --wait`
-            starting = false
+            if let failure {
+                StartFailure.record(failure)  // for `start --wait`
+                capture = .idle
+            }
             updateUI()
             // A stop asked for meanwhile runs now, before the alerts below (which block).
             applyPendingRequest()
@@ -255,7 +287,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func stop(_ s: RecordingSession, quiet: Bool = false) {
         let quiet = quiet || s.quiet
-        stopping = true
+        capture = .stopping(s)
         timer?.invalidate(); timer = nil
         updateUI()
         let report = progressReporter(recovering: false)
@@ -263,8 +295,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // 1. Stop capture (fast). From here a new recording can start, e.g. the next meeting
             //    right away, while this one is processed.
             await Task.detached(priority: .userInitiated) { s.stopCapture() }.value
-            session = nil
-            stopping = false
+            capture = .idle
             saving += 1
             progress = 0
             updateUI()
@@ -301,7 +332,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateUI() {
         guard let button = statusItem?.button else { return }
-        let recording = session != nil || stopping || saving > 0 || recoveringPrevious
+        let recording = capture.session != nil || saving > 0 || recoveringPrevious
         if appState.isRecording != recording {
             appState.isRecording = recording
             if !recording { appState.updates.idle() }
@@ -329,12 +360,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quitItem.title = tr("Quit")
         var icon = MenuBarIcons.idle
         var label = ""
-        if stopping {
+        switch capture {
+        case .stopping:
             icon = MenuBarIcons.saving
             toggleItem.title = tr("Saving… %@", percent)
             toggleItem.isEnabled = false
             button.toolTip = "Meep: " + tr("saving")
-        } else if let s = session {
+        case .recording(let s):
             let elapsed = RecordingSession.clock(Date().timeIntervalSince(s.startedAt))
             toggleItem.title = tr("Stop Recording (%@)", elapsed)
             toggleItem.isEnabled = true
@@ -355,7 +387,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 healthItem.isHidden = false
             }
             button.toolTip = "Meep: " + tr("recording") + " \(elapsed)"
-        } else {
+        case .idle, .starting:
             toggleItem.title = tr("Start Recording")
             toggleItem.isEnabled = true
             button.toolTip = "Meep"
@@ -372,7 +404,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 healthItem.isHidden = false
             }
         }
-        if let p = progress, session == nil, saving > 0 || recoveringPrevious {
+        if let p = progress, capture.session == nil, saving > 0 || recoveringPrevious {
             progressBar.doubleValue = p
             progressItem.isHidden = false
         }
@@ -382,7 +414,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.attributedTitle = NSAttributedString(string: label.isEmpty ? "" : " " + label, attributes: [
             .font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
         ])
-        if icon == nil { button.title = session != nil ? "🔴 " + label : (stopping || saving > 0 ? "⏳" : "🎙") }  // assets missing
+        if icon == nil { button.title = capture.session != nil ? "🔴 " + label : (saving > 0 ? "⏳" : "🎙") }  // assets missing
     }
 
     /// Asks for microphone access the first time; afterwards returns the stored decision.
@@ -423,7 +455,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Quit, logout or shutdown: close the capture files and exit right away. Processing (AEC,
     /// mix, AAC) is not waited for; it runs on the next launch (see recoverUnfinishedSessions).
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        session?.stopCapture()
+        capture.session?.stopCapture()
         Subprocesses.terminateAll()
         return .terminateNow
     }
@@ -460,8 +492,6 @@ if let exe = Bundle.main.executableURL?.standardizedFileURL,
     perror("execv \(real.path)")
     exit(1)
 }
-
-AppSettings.migrateFromOldDomains()
 
 let cliArguments = Array(CommandLine.arguments.dropFirst())
 if CLI.isInvocation(cliArguments) { CLI.main(cliArguments) }

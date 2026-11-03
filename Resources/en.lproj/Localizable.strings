@@ -100,7 +100,6 @@
 "Choose" = "Choose";
 "Choose where to save recordings." = "Choose where to save recordings.";
 "Can't save to %@: no write permission." = "Can't save to %@: no write permission.";
-"Set by MEEP_ROOT." = "Set by MEEP_ROOT.";
 "The microphone recorded nothing. Check the input device." = "The microphone recorded nothing. Check the input device.";
 "System audio recorded nothing." = "System audio recorded nothing.";
 "No microphone access, and system audio recording is off: there is nothing to record." = "No microphone access, and system audio recording is off: there is nothing to record.";

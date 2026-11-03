@@ -100,7 +100,6 @@
 "Choose" = "選擇";
 "Choose where to save recordings." = "選擇錄音的儲存位置。";
 "Can't save to %@: no write permission." = "無法儲存到 %@：沒有寫入權限。";
-"Set by MEEP_ROOT." = "由 MEEP_ROOT 指定。";
 "The microphone recorded nothing. Check the input device." = "麥克風什麼也沒錄到，請檢查輸入裝置。";
 "System audio recorded nothing." = "系統聲音什麼也沒錄到。";
 "No microphone access, and system audio recording is off: there is nothing to record." = "沒有麥克風權限，系統聲音錄製也已關閉：沒有可錄製的內容。";

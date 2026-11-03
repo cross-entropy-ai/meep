@@ -326,7 +326,7 @@ struct GeneralPreferencesView: View {
                 LabeledContent {
                     HStack {
                         Button(tr("Change…"), action: state.chooseRecordingsFolder)
-                            .disabled(state.isRecording || AppSettings.recordingsFolderFromEnvironment)
+                            .disabled(state.isRecording)
                         Button(tr("Show in Finder"), action: RecordingSession.revealRootDirectory)
                     }
                 } label: {
@@ -338,8 +338,6 @@ struct GeneralPreferencesView: View {
                 }
                 if let e = state.recordingsFolderError {
                     Text(e).font(.caption).foregroundStyle(.red)
-                } else if AppSettings.recordingsFolderFromEnvironment {
-                    Text(tr("Set by MEEP_ROOT.")).font(.caption).foregroundStyle(.secondary)
                 } else if state.isRecording {
                     Text(tr("Can't change while recording.")).font(.caption).foregroundStyle(.secondary)
                 }

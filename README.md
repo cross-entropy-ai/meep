@@ -36,7 +36,7 @@ The first time you record, macOS asks for **Microphone** and **System Audio Reco
 ```bash
 meep start --wait    # start recording, print the recording folder
 meep stop --wait     # stop, return once the recording is saved
-meep status          # JSON: idle / recording / saving
+meep status          # idle, recording or saving (--json for details)
 meep help            # all commands and settings
 ```
 
