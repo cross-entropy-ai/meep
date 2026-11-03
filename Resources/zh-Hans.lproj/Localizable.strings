@@ -36,9 +36,6 @@
 "System audio stopped at %1$@ and could not be restored (%2$@)." = "系统声音在 %1$@ 中断后未能恢复（%2$@）。";
 "Use at least one of ⌘, ⌥ or ⌃." = "至少要包含 ⌘、⌥ 或 ⌃。";
 "%@ is already used by another app." = "%@ 已被其他 app 占用。";
-"No update source configured (MRUpdateGitHubRepo in Info.plist)." = "未配置更新源（Info.plist 的 MRUpdateGitHubRepo）。";
-"No releases found for %@." = "%@ 还没有发布版本。";
-"Unexpected response (HTTP %@)." = "响应异常（HTTP %@）。";
 "Launch" = "启动";
 "Start at Login" = "开机启动";
 "Hotkey" = "快捷键";
@@ -63,11 +60,6 @@
 "Version" = "版本";
 "Privacy Policy" = "隐私政策";
 "Terms of Use" = "使用条款";
-"Checking…" = "正在检查…";
-"Check for Updates" = "检查更新";
-"You're up to date." = "已是最新版本。";
-"Version %@ is available." = "有新版本 %@。";
-"Download" = "下载";
 "Not configured yet" = "尚未配置";
 "General" = "通用";
 "About" = "关于";
@@ -117,3 +109,5 @@
 "Weekly" = "每周";
 "Monthly" = "每月";
 "Update Available: %@" = "有可用更新：%@";
+"Check for Updates…" = "检查更新…";
+"Development build: updates are off." = "开发版本：更新已关闭。";

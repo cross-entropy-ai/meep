@@ -36,9 +36,6 @@
 "System audio stopped at %1$@ and could not be restored (%2$@)." = "L'audio système s'est arrêté à %1$@ et n'a pas pu être rétabli (%2$@).";
 "Use at least one of ⌘, ⌥ or ⌃." = "Utilisez au moins l'une des touches ⌘, ⌥ ou ⌃.";
 "%@ is already used by another app." = "%@ est déjà utilisé par une autre app.";
-"No update source configured (MRUpdateGitHubRepo in Info.plist)." = "Aucune source de mise à jour configurée (MRUpdateGitHubRepo dans Info.plist).";
-"No releases found for %@." = "Aucune version publiée pour %@.";
-"Unexpected response (HTTP %@)." = "Réponse inattendue (HTTP %@).";
 "Launch" = "Démarrage";
 "Start at Login" = "Ouvrir à la connexion";
 "Hotkey" = "Raccourci";
@@ -63,11 +60,6 @@
 "Version" = "Version";
 "Privacy Policy" = "Politique de confidentialité";
 "Terms of Use" = "Conditions d'utilisation";
-"Checking…" = "Vérification…";
-"Check for Updates" = "Rechercher des mises à jour";
-"You're up to date." = "Vous êtes à jour.";
-"Version %@ is available." = "La version %@ est disponible.";
-"Download" = "Télécharger";
 "Not configured yet" = "Pas encore configuré";
 "General" = "Général";
 "About" = "À propos";
@@ -117,3 +109,5 @@
 "Weekly" = "Toutes les semaines";
 "Monthly" = "Tous les mois";
 "Update Available: %@" = "Mise à jour disponible : %@";
+"Check for Updates…" = "Rechercher des mises à jour…";
+"Development build: updates are off." = "Version de développement : mises à jour désactivées.";

@@ -22,7 +22,8 @@ enum NoiseSuppression: String, CaseIterable {
     }
 }
 
-/// How often Meep looks for a newer release on its own (About › Check Automatically).
+/// How often Meep looks for a newer release on its own (About › Check Automatically), stored by
+/// Sparkle as SUEnableAutomaticChecks and SUScheduledCheckInterval.
 enum UpdateCheck: String, CaseIterable {
     case off, daily, weekly, monthly
 
@@ -68,7 +69,6 @@ enum AppSettings {
         static let openFolderAfterSaving = "openFolderAfterSaving"
         static let recordingsFolder = "recordingsFolder"
         static let inputDeviceUID = "inputDeviceUID"
-        static let updateCheck = "updateCheck"
     }
 
     /// Defaults of those settings (also Preferences › Audio › Restore Defaults).
@@ -175,17 +175,6 @@ enum AppSettings {
         d.object(forKey: Key.openFolderAfterSaving) as? Bool ?? Default.openFolderAfterSaving
     }
 
-    /// Automatic update check (default weekly).
-    static var updateCheck: UpdateCheck {
-        d.string(forKey: Key.updateCheck).flatMap(UpdateCheck.init(rawValue:)) ?? Default.updateCheck
-    }
-
-    /// When the last update check got an answer from GitHub.
-    static var lastUpdateCheck: Date? {
-        get { d.object(forKey: "lastUpdateCheck") as? Date }
-        set { d.set(newValue, forKey: "lastUpdateCheck") }
-    }
-
     /// Skip the "track was silent the whole time" alert (set from the alert's "Don't show again").
     static var hideSilenceWarnings: Bool {
         get { d.bool(forKey: "hideSilenceWarnings") }
@@ -230,6 +219,4 @@ enum AppInfo {
     static var copyright: String { string("NSHumanReadableCopyright") }
     static var privacyPolicyURL: URL? { URL(string: string("MRPrivacyPolicyURL")).flatMap { $0.scheme == nil ? nil : $0 } }
     static var termsOfUseURL: URL? { URL(string: string("MRTermsOfUseURL")).flatMap { $0.scheme == nil ? nil : $0 } }
-    /// "owner/repo" whose GitHub Releases are the update source.
-    static var updateRepo: String { string("MRUpdateGitHubRepo") }
 }

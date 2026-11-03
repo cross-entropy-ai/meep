@@ -1,12 +1,13 @@
 name: Release
 
 # Builds, signs and notarizes Meep. With "publish", also creates the tag v<CFBundleShortVersionString>
-# and the GitHub release (zip, Homebrew cask meep.rb, checksums.txt) as github-actions[bot];
+# and the GitHub release (zip, Homebrew cask meep.rb, Sparkle appcast.xml, checksums.txt) as github-actions[bot];
 # cross-entropy-ai/homebrew-tap picks up meep.rb. Without it, the files are kept as an artifact.
 #   gh workflow run release.yml -f publish=true -f notes="$(cat notes.md)"
 #
 # Secrets: DEVELOPER_ID_P12 (base64 of the "Developer ID Application" identity exported as .p12),
-#          DEVELOPER_ID_P12_PASSWORD, NOTARY_APPLE_ID, NOTARY_PASSWORD (app-specific password).
+#          DEVELOPER_ID_P12_PASSWORD, NOTARY_APPLE_ID, NOTARY_PASSWORD (app-specific password),
+#          SPARKLE_PRIVATE_KEY (EdDSA update key: generate_keys --account dev.junyi.Meep -x <file>).
 
 on:
   workflow_dispatch:
@@ -81,6 +82,8 @@ jobs:
           NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
           NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
           NOTARY_TEAM_ID: P9772KLZBG
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          RELEASE_NOTES: ${{ inputs.notes }}
         run: scripts/release.sh build/release
 
       - uses: actions/upload-artifact@v4

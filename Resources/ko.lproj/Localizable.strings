@@ -36,9 +36,6 @@
 "System audio stopped at %1$@ and could not be restored (%2$@)." = "시스템 오디오가 %1$@에 중단된 후 복구되지 않았습니다(%2$@).";
 "Use at least one of ⌘, ⌥ or ⌃." = "⌘, ⌥, ⌃ 중 하나 이상을 포함하세요.";
 "%@ is already used by another app." = "%@은(는) 다른 앱에서 사용 중입니다.";
-"No update source configured (MRUpdateGitHubRepo in Info.plist)." = "업데이트 소스가 설정되지 않았습니다(Info.plist의 MRUpdateGitHubRepo).";
-"No releases found for %@." = "%@의 릴리스를 찾을 수 없습니다.";
-"Unexpected response (HTTP %@)." = "예상치 못한 응답(HTTP %@).";
 "Launch" = "실행";
 "Start at Login" = "로그인 시 시작";
 "Hotkey" = "단축키";
@@ -63,11 +60,6 @@
 "Version" = "버전";
 "Privacy Policy" = "개인정보 처리방침";
 "Terms of Use" = "이용 약관";
-"Checking…" = "확인 중…";
-"Check for Updates" = "업데이트 확인";
-"You're up to date." = "최신 버전입니다.";
-"Version %@ is available." = "버전 %@을(를) 사용할 수 있습니다.";
-"Download" = "다운로드";
 "Not configured yet" = "아직 설정되지 않음";
 "General" = "일반";
 "About" = "정보";
@@ -117,3 +109,5 @@
 "Weekly" = "매주";
 "Monthly" = "매월";
 "Update Available: %@" = "업데이트 있음: %@";
+"Check for Updates…" = "업데이트 확인…";
+"Development build: updates are off." = "개발 빌드: 업데이트가 꺼져 있습니다.";

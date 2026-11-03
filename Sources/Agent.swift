@@ -230,7 +230,8 @@ enum HelpText {
           recordingsFolder -string <path>
           afterSaveCommand -string <command>
           openFolderAfterSaving -bool true|false
-          updateCheck -string off|daily|weekly|monthly   automatic update check
+          SUEnableAutomaticChecks -bool true|false, SUScheduledCheckInterval -int <seconds>
+                                               automatic update check (Sparkle)
         """
     }
 }

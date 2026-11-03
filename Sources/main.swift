@@ -9,7 +9,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var folderItem: NSMenuItem!
     private var prefsItem: NSMenuItem!
     private var updateItem: NSMenuItem!
-    private var updateTimer: Timer?
     private var quitItem: NSMenuItem!
     private var session: RecordingSession?
     private var timer: Timer?
@@ -88,11 +87,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         GlobalHotKey.shared.register(AppSettings.hotKey)
         updateUI()
 
-        // Automatic update check: due now or later; looked at every hour (also after sleep).
-        appState.checkForUpdateIfDue()
-        updateTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.appState.checkForUpdateIfDue() }
-        }
+        // Updates (Sparkle): an install waits until recording and saving are done.
+        appState.updates.isBusy = { [weak self] in self?.appState.isRecording ?? false }
+        appState.updates.onChange = { [weak self] in self?.updateUI() }
+        appState.updates.start()
 
         launched = true
         launchedQuietly = pendingCommand?.quiet ?? false
@@ -114,9 +112,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Menu
 
-    /// Opens the release page of the update the automatic or manual check found.
+    /// Shows the update a scheduled check found.
     @objc private func openUpdate() {
-        if case .available(_, let url) = appState.update { NSWorkspace.shared.open(url) }
+        appState.updates.checkForUpdates()
     }
 
     @objc private func showPreferences() {
@@ -304,7 +302,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateUI() {
         guard let button = statusItem?.button else { return }
         let recording = session != nil || stopping || saving > 0 || recoveringPrevious
-        if appState.isRecording != recording { appState.isRecording = recording }
+        if appState.isRecording != recording {
+            appState.isRecording = recording
+            if !recording { appState.updates.idle() }
+        }
         // Hidden while idle if the user turned the icon off; always shown while recording/saving.
         statusItem.isVisible = AppSettings.showMenuBarIcon || recording
         // Show the global hotkey on the start/stop item.
@@ -319,7 +320,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let percent = progress.map { "\(Int($0 * 100))%" } ?? ""
         folderItem.title = tr("Open Recordings Folder")
         prefsItem.title = tr("Open Preferences…")
-        if case .available(let v, _) = appState.update {
+        if let v = appState.updates.pendingVersion {
             updateItem.title = tr("Update Available: %@", v)
             updateItem.isHidden = false
         } else {

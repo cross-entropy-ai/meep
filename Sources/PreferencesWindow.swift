@@ -19,11 +19,8 @@ final class AppState {
     var hotKeyError: String?
     @ObservationIgnored private var keyMonitor: Any?
 
-    // Updates
-    enum UpdateStatus: Equatable, Sendable {
-        case idle, checking, upToDate, available(version: String, url: URL), failed(String)
-    }
-    var update: UpdateStatus = .idle
+    /// Sparkle (started by AppDelegate).
+    let updates = Updates()
 
     /// Called when a setting that affects the menu bar changes.
     @ObservationIgnored var onChange: () -> Void = {}
@@ -273,56 +270,6 @@ final class AppState {
             hotKeyError = tr("%@ is already used by another app.", s?.display ?? "")
             GlobalHotKey.shared.register(AppSettings.hotKey)  // keep the previous one
         }
-    }
-
-    // MARK: Update check (GitHub Releases)
-
-    /// Check for Updates. `automatic`: the scheduled check, which shows nothing while it runs
-    /// and keeps the previous status when it fails (it is retried within the hour).
-    func checkForUpdate(automatic: Bool = false) {
-        guard update != .checking else { return }
-        let repo = AppInfo.updateRepo
-        guard !repo.isEmpty, let api = URL(string: "https://api.github.com/repos/\(repo)/releases/latest") else {
-            if !automatic { update = .failed(tr("No update source configured (MRUpdateGitHubRepo in Info.plist).")) }
-            return
-        }
-        let previous = update
-        update = .checking
-        var req = URLRequest(url: api)
-        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        Task {
-            let result = await Self.latestRelease(req, repo: repo)
-            if case .failed = result {
-                update = automatic ? previous : result
-            } else {
-                AppSettings.lastUpdateCheck = Date()
-                update = result
-            }
-            onChange()  // the menu shows an available update
-        }
-    }
-
-    /// Runs the automatic check when the chosen interval has passed since the last one.
-    func checkForUpdateIfDue() {
-        guard let interval = AppSettings.updateCheck.interval else { return }
-        if let last = AppSettings.lastUpdateCheck, Date().timeIntervalSince(last) < interval { return }
-        checkForUpdate(automatic: true)
-    }
-
-    private nonisolated static func latestRelease(_ req: URLRequest, repo: String) async -> UpdateStatus {
-        let data: Data, response: URLResponse
-        do { (data, response) = try await URLSession.shared.data(for: req) } catch {
-            return .failed(error.localizedDescription)
-        }
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let tag = json["tag_name"] as? String,
-              let page = (json["html_url"] as? String).flatMap(URL.init(string:)) else {
-            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            return .failed(code == 404 ? tr("No releases found for %@.", repo) : tr("Unexpected response (HTTP %@).", code))
-        }
-        let latest = tag.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
-        return latest.compare(AppInfo.version, options: .numeric) == .orderedDescending
-            ? .available(version: latest, url: page) : .upToDate
     }
 }
 
@@ -658,7 +605,6 @@ struct AgentPreferencesView: View {
 struct AboutPreferencesView: View {
     let state: AppState
     @AppStorage(AppSettings.Key.language) private var language = AppLanguage.system.rawValue
-    @AppStorage(AppSettings.Key.updateCheck) private var updateCheck = AppSettings.Default.updateCheck.rawValue
 
     var body: some View {
         VStack(spacing: 0) {
@@ -684,44 +630,28 @@ struct AboutPreferencesView: View {
                 .font(.caption).foregroundStyle(.secondary)
                 .padding(.top, 10)
 
-            Button { state.checkForUpdate() } label: {
-                Text(state.update == .checking ? tr("Checking…") : tr("Check for Updates"))
-                    .frame(minWidth: 140)
-            }
-            .disabled(state.update == .checking)
-            .padding(.top, 18)
-            Picker(tr("Check Automatically"), selection: $updateCheck) {
-                Text(tr("Off")).tag(UpdateCheck.off.rawValue)
-                Text(tr("Daily")).tag(UpdateCheck.daily.rawValue)
-                Text(tr("Weekly")).tag(UpdateCheck.weekly.rawValue)
-                Text(tr("Monthly")).tag(UpdateCheck.monthly.rawValue)
+            Button(tr("Check for Updates…"), action: state.updates.checkForUpdates)
+                .frame(minWidth: 140)
+                .disabled(!state.updates.isEnabled)
+                .padding(.top, 18)
+            Picker(tr("Check Automatically"), selection: Binding(
+                get: { state.updates.updateCheck }, set: { state.updates.updateCheck = $0 })) {
+                Text(tr("Off")).tag(UpdateCheck.off)
+                Text(tr("Daily")).tag(UpdateCheck.daily)
+                Text(tr("Weekly")).tag(UpdateCheck.weekly)
+                Text(tr("Monthly")).tag(UpdateCheck.monthly)
             }
             .fixedSize()
+            .disabled(!state.updates.isEnabled)
             .padding(.top, 10)
-            .onChange(of: updateCheck) { _, _ in state.checkForUpdateIfDue() }
-            updateStatus
-                .font(.caption)
-                .multilineTextAlignment(.center)
-                .frame(height: 32, alignment: .top)
+            Text(state.updates.isEnabled ? " " : tr("Development build: updates are off."))
+                .font(.caption).foregroundStyle(.secondary)
                 .padding(.top, 6)
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 12)
         .frame(width: 460)
         .fixedSize()
-    }
-
-    @ViewBuilder private var updateStatus: some View {
-        switch state.update {
-        case .idle, .checking: Text(" ")
-        case .upToDate: Text(tr("You're up to date.")).foregroundStyle(.secondary)
-        case .available(let v, let url):
-            HStack(spacing: 4) {
-                Text(tr("Version %@ is available.", v)).foregroundStyle(.secondary)
-                Link(tr("Download"), destination: url)
-            }
-        case .failed(let msg): Text(msg).foregroundStyle(.secondary)
-        }
     }
 
     @ViewBuilder private func link(_ title: String, _ url: URL?) -> some View {

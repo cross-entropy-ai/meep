@@ -36,9 +36,6 @@
 "System audio stopped at %1$@ and could not be restored (%2$@)." = "システムオーディオが %1$@ に停止し、復旧できませんでした（%2$@）。";
 "Use at least one of ⌘, ⌥ or ⌃." = "⌘、⌥、⌃ のいずれかを含めてください。";
 "%@ is already used by another app." = "%@ は他のアプリで使用されています。";
-"No update source configured (MRUpdateGitHubRepo in Info.plist)." = "アップデート元が設定されていません（Info.plist の MRUpdateGitHubRepo）。";
-"No releases found for %@." = "%@ のリリースが見つかりません。";
-"Unexpected response (HTTP %@)." = "予期しない応答です（HTTP %@）。";
 "Launch" = "起動";
 "Start at Login" = "ログイン時に起動";
 "Hotkey" = "ショートカット";
@@ -63,11 +60,6 @@
 "Version" = "バージョン";
 "Privacy Policy" = "プライバシーポリシー";
 "Terms of Use" = "利用規約";
-"Checking…" = "確認中…";
-"Check for Updates" = "アップデートを確認";
-"You're up to date." = "最新バージョンです。";
-"Version %@ is available." = "バージョン %@ が利用可能です。";
-"Download" = "ダウンロード";
 "Not configured yet" = "未設定";
 "General" = "一般";
 "About" = "情報";
@@ -117,3 +109,5 @@
 "Weekly" = "毎週";
 "Monthly" = "毎月";
 "Update Available: %@" = "アップデートがあります: %@";
+"Check for Updates…" = "アップデートを確認…";
+"Development build: updates are off." = "開発ビルドのため、アップデートはオフです。";

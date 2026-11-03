@@ -8,13 +8,21 @@ WEBRTC=vendor/webrtc   # built by scripts/build-webrtc.sh
 [ -f "$WEBRTC/lib/libwebrtc_apm.a" ] || ./scripts/build-webrtc.sh
 FFMPEG=vendor/ffmpeg   # built by scripts/build-ffmpeg.sh
 [ -x "$FFMPEG/bin/ffmpeg" ] || ./scripts/build-ffmpeg.sh
+SPARKLE=vendor/sparkle # downloaded by scripts/fetch-sparkle.sh
+[ "$(cat "$SPARKLE/VERSION" 2>/dev/null)" = "$(sed -n 's/^VERSION=//p' scripts/fetch-sparkle.sh)" ] || ./scripts/fetch-sparkle.sh
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Helpers"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Helpers" "$APP/Contents/Frameworks"
 cp Info.plist "$APP/Contents/Info.plist"
 # ffmpeg (LGPL) runs as a separate helper process; its license and configure line go along.
 cp "$FFMPEG/bin/ffmpeg" "$APP/Contents/Helpers/ffmpeg"
 mkdir -p "$APP/Contents/Resources/ffmpeg"
 cp "$FFMPEG/LICENSE" "$FFMPEG/BUILDINFO" "$APP/Contents/Resources/ffmpeg/"
+# Sparkle (MIT). Its XPC services are only for sandboxed apps; Meep isn't sandboxed.
+ditto "$SPARKLE/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
+rm -rf "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices" \
+       "$APP/Contents/Frameworks/Sparkle.framework/XPCServices"
+mkdir -p "$APP/Contents/Resources/Sparkle"
+cp "$SPARKLE/LICENSE" "$APP/Contents/Resources/Sparkle/"
 
 # Menu bar icons (loaded at runtime as SVG) and the app icon (.icns from assets/app-icon.png).
 cp assets/*.svg "$APP/Contents/Resources/"
@@ -34,6 +42,7 @@ clang++ -O2 -std=c++17 -target arm64-apple-macos15.0 -DWEBRTC_POSIX -DWEBRTC_MAC
 swiftc -O -swift-version 6 \
   -target arm64-apple-macos15.0 \
   -framework AppKit -framework AVFoundation -framework CoreAudio -framework ServiceManagement -framework SwiftUI \
+  -F "$SPARKLE" -framework Sparkle -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
   -import-objc-header Native/webrtc_aec.h build/obj/webrtc_aec.o "$WEBRTC/lib/libwebrtc_apm.a" -lc++ \
   Sources/*.swift -o "$APP/Contents/MacOS/Meep"
 
@@ -45,6 +54,10 @@ SIGN=(codesign --force --options runtime --sign "${IDENTITY:--}")
 [[ "$IDENTITY" == "Developer ID"* ]] && SIGN+=(--timestamp)
 # Nested code first: the app's signature seals the already-signed helper.
 "${SIGN[@]}" "$APP/Contents/Helpers/ffmpeg"
+SPARKLE_B="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
+"${SIGN[@]}" "$SPARKLE_B/Autoupdate"
+"${SIGN[@]}" "$SPARKLE_B/Updater.app"
+"${SIGN[@]}" "$APP/Contents/Frameworks/Sparkle.framework"
 "${SIGN[@]}" --entitlements Meep.entitlements "$APP"
 echo "Built $APP (signed with: ${IDENTITY:-ad-hoc})"
 
