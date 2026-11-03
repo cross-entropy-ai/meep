@@ -68,7 +68,7 @@ cask "meep" do
 
   uninstall quit: "com.junyi.Meep"
 
-  # Recordings in ~/Documents/MeetingRecordings are left alone.
+  # Recordings in ~/Documents/MeepRecordings are left alone.
   zap trash: [
     "~/Library/Application Support/Meep",
     "~/Library/Preferences/com.junyi.Meep.plist",

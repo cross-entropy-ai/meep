@@ -64,7 +64,7 @@ enum AppSettings {
     }
 
     /// Where recordings are saved: $MEEP_ROOT, else the `recordingsFolder` default
-    /// (a path, `~` expanded), else ~/Documents/MeetingRecordings. Set in Preferences › General,
+    /// (a path, `~` expanded), else ~/Documents/MeepRecordings. Set in Preferences › General,
     /// or `defaults write com.junyi.Meep recordingsFolder -string ~/Meetings`
     static var recordingsFolder: URL {
         folder(ProcessInfo.processInfo.environment["MEEP_ROOT"]) ?? appRecordingsFolder
@@ -83,7 +83,7 @@ enum AppSettings {
 
     static var defaultRecordingsFolder: URL {
         FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Documents/MeetingRecordings", isDirectory: true)
+            .appendingPathComponent("Documents/MeepRecordings", isDirectory: true)
     }
 
     /// $MEEP_ROOT wins over the setting, so Preferences can't change the folder then.
