@@ -112,3 +112,8 @@
 "The microphone recorded nothing. Check the input device." = "El micrófono no grabó nada. Revisa el dispositivo de entrada.";
 "System audio recorded nothing." = "El audio del sistema no grabó nada.";
 "No microphone access, and system audio recording is off: there is nothing to record." = "Sin acceso al micrófono y la grabación del audio del sistema está desactivada: no hay nada que grabar.";
+"Check Automatically" = "Comprobar automáticamente";
+"Daily" = "A diario";
+"Weekly" = "Semanalmente";
+"Monthly" = "Mensualmente";
+"Update Available: %@" = "Actualización disponible: %@";

@@ -112,3 +112,8 @@
 "The microphone recorded nothing. Check the input device." = "麦克风什么也没录到，请检查输入设备。";
 "System audio recorded nothing." = "系统声音什么也没录到。";
 "No microphone access, and system audio recording is off: there is nothing to record." = "没有麦克风权限，系统声音录制也已关闭：没有可录制的内容。";
+"Check Automatically" = "自动检查";
+"Daily" = "每天";
+"Weekly" = "每周";
+"Monthly" = "每月";
+"Update Available: %@" = "有可用更新：%@";

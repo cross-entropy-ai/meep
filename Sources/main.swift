@@ -8,6 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var healthItem: NSMenuItem!
     private var folderItem: NSMenuItem!
     private var prefsItem: NSMenuItem!
+    private var updateItem: NSMenuItem!
+    private var updateTimer: Timer?
     private var quitItem: NSMenuItem!
     private var session: RecordingSession?
     private var timer: Timer?
@@ -66,6 +68,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         folderItem = NSMenuItem(title: "", action: #selector(openFolder), keyEquivalent: "o")
         menu.addItem(folderItem)
         menu.addItem(.separator())
+        updateItem = NSMenuItem(title: "", action: #selector(openUpdate), keyEquivalent: "")
+        updateItem.isHidden = true
+        menu.addItem(updateItem)
         prefsItem = NSMenuItem(title: "", action: #selector(showPreferences), keyEquivalent: ",")
         menu.addItem(prefsItem)
         menu.addItem(.separator())
@@ -82,6 +87,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         GlobalHotKey.shared.action = { [weak self] in self?.toggle() }
         GlobalHotKey.shared.register(AppSettings.hotKey)
         updateUI()
+
+        // Automatic update check: due now or later; looked at every hour (also after sleep).
+        appState.checkForUpdateIfDue()
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.appState.checkForUpdateIfDue() }
+        }
 
         launched = true
         launchedQuietly = pendingCommand?.quiet ?? false
@@ -102,6 +113,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // MARK: - Menu
+
+    /// Opens the release page of the update the automatic or manual check found.
+    @objc private func openUpdate() {
+        if case .available(_, let url) = appState.update { NSWorkspace.shared.open(url) }
+    }
 
     @objc private func showPreferences() {
         preferences.show()
@@ -303,6 +319,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let percent = progress.map { "\(Int($0 * 100))%" } ?? ""
         folderItem.title = tr("Open Recordings Folder")
         prefsItem.title = tr("Open Preferences…")
+        if case .available(let v, _) = appState.update {
+            updateItem.title = tr("Update Available: %@", v)
+            updateItem.isHidden = false
+        } else {
+            updateItem.isHidden = true
+        }
         quitItem.title = tr("Quit")
         var icon = MenuBarIcons.idle
         var label = ""

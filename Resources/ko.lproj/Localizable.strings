@@ -112,3 +112,8 @@
 "The microphone recorded nothing. Check the input device." = "마이크에 아무것도 녹음되지 않았습니다. 입력 기기를 확인하세요.";
 "System audio recorded nothing." = "시스템 오디오에 아무것도 녹음되지 않았습니다.";
 "No microphone access, and system audio recording is off: there is nothing to record." = "마이크 접근 권한이 없고 시스템 오디오 녹음도 꺼져 있어 녹음할 내용이 없습니다.";
+"Check Automatically" = "자동으로 확인";
+"Daily" = "매일";
+"Weekly" = "매주";
+"Monthly" = "매월";
+"Update Available: %@" = "업데이트 있음: %@";

@@ -277,18 +277,36 @@ final class AppState {
 
     // MARK: Update check (GitHub Releases)
 
-    func checkForUpdate() {
+    /// Check for Updates. `automatic`: the scheduled check, which shows nothing while it runs
+    /// and keeps the previous status when it fails (it is retried within the hour).
+    func checkForUpdate(automatic: Bool = false) {
+        guard update != .checking else { return }
         let repo = AppInfo.updateRepo
         guard !repo.isEmpty, let api = URL(string: "https://api.github.com/repos/\(repo)/releases/latest") else {
-            update = .failed(tr("No update source configured (MRUpdateGitHubRepo in Info.plist)."))
+            if !automatic { update = .failed(tr("No update source configured (MRUpdateGitHubRepo in Info.plist).")) }
             return
         }
+        let previous = update
         update = .checking
         var req = URLRequest(url: api)
         req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         Task {
-            update = await Self.latestRelease(req, repo: repo)
+            let result = await Self.latestRelease(req, repo: repo)
+            if case .failed = result {
+                update = automatic ? previous : result
+            } else {
+                AppSettings.lastUpdateCheck = Date()
+                update = result
+            }
+            onChange()  // the menu shows an available update
         }
+    }
+
+    /// Runs the automatic check when the chosen interval has passed since the last one.
+    func checkForUpdateIfDue() {
+        guard let interval = AppSettings.updateCheck.interval else { return }
+        if let last = AppSettings.lastUpdateCheck, Date().timeIntervalSince(last) < interval { return }
+        checkForUpdate(automatic: true)
     }
 
     private nonisolated static func latestRelease(_ req: URLRequest, repo: String) async -> UpdateStatus {
@@ -640,6 +658,7 @@ struct AgentPreferencesView: View {
 struct AboutPreferencesView: View {
     let state: AppState
     @AppStorage(AppSettings.Key.language) private var language = AppLanguage.system.rawValue
+    @AppStorage(AppSettings.Key.updateCheck) private var updateCheck = AppSettings.Default.updateCheck.rawValue
 
     var body: some View {
         VStack(spacing: 0) {
@@ -665,12 +684,21 @@ struct AboutPreferencesView: View {
                 .font(.caption).foregroundStyle(.secondary)
                 .padding(.top, 10)
 
-            Button(action: state.checkForUpdate) {
+            Button { state.checkForUpdate() } label: {
                 Text(state.update == .checking ? tr("Checking…") : tr("Check for Updates"))
                     .frame(minWidth: 140)
             }
             .disabled(state.update == .checking)
             .padding(.top, 18)
+            Picker(tr("Check Automatically"), selection: $updateCheck) {
+                Text(tr("Off")).tag(UpdateCheck.off.rawValue)
+                Text(tr("Daily")).tag(UpdateCheck.daily.rawValue)
+                Text(tr("Weekly")).tag(UpdateCheck.weekly.rawValue)
+                Text(tr("Monthly")).tag(UpdateCheck.monthly.rawValue)
+            }
+            .fixedSize()
+            .padding(.top, 10)
+            .onChange(of: updateCheck) { _, _ in state.checkForUpdateIfDue() }
             updateStatus
                 .font(.caption)
                 .multilineTextAlignment(.center)

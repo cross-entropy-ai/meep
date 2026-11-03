@@ -112,3 +112,8 @@
 "The microphone recorded nothing. Check the input device." = "The microphone recorded nothing. Check the input device.";
 "System audio recorded nothing." = "System audio recorded nothing.";
 "No microphone access, and system audio recording is off: there is nothing to record." = "No microphone access, and system audio recording is off: there is nothing to record.";
+"Check Automatically" = "Check Automatically";
+"Daily" = "Daily";
+"Weekly" = "Weekly";
+"Monthly" = "Monthly";
+"Update Available: %@" = "Update Available: %@";

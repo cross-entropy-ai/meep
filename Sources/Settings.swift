@@ -22,6 +22,20 @@ enum NoiseSuppression: String, CaseIterable {
     }
 }
 
+/// How often Meep looks for a newer release on its own (About › Check Automatically).
+enum UpdateCheck: String, CaseIterable {
+    case off, daily, weekly, monthly
+
+    var interval: TimeInterval? {
+        switch self {
+        case .off: nil
+        case .daily: 86_400
+        case .weekly: 7 * 86_400
+        case .monthly: 30 * 86_400
+        }
+    }
+}
+
 /// User settings (UserDefaults domain dev.junyi.Meep). Most are written by
 /// Preferences through @AppStorage with the same key and default; see `help` for the keys.
 /// CLI: `defaults write dev.junyi.Meep echoCancellation -string off|apple|webrtc`
@@ -54,6 +68,7 @@ enum AppSettings {
         static let openFolderAfterSaving = "openFolderAfterSaving"
         static let recordingsFolder = "recordingsFolder"
         static let inputDeviceUID = "inputDeviceUID"
+        static let updateCheck = "updateCheck"
     }
 
     /// Defaults of those settings (also Preferences › Audio › Restore Defaults).
@@ -66,6 +81,7 @@ enum AppSettings {
         static let showMenuBarIcon = true
         static let afterSaveCommand = ""
         static let openFolderAfterSaving = true
+        static let updateCheck = UpdateCheck.weekly
     }
 
     /// Where recordings are saved: $MEEP_ROOT, else the `recordingsFolder` default
@@ -157,6 +173,17 @@ enum AppSettings {
     /// Reveal the recording in Finder once it has been saved (default on).
     static var openFolderAfterSaving: Bool {
         d.object(forKey: Key.openFolderAfterSaving) as? Bool ?? Default.openFolderAfterSaving
+    }
+
+    /// Automatic update check (default weekly).
+    static var updateCheck: UpdateCheck {
+        d.string(forKey: Key.updateCheck).flatMap(UpdateCheck.init(rawValue:)) ?? Default.updateCheck
+    }
+
+    /// When the last update check got an answer from GitHub.
+    static var lastUpdateCheck: Date? {
+        get { d.object(forKey: "lastUpdateCheck") as? Date }
+        set { d.set(newValue, forKey: "lastUpdateCheck") }
     }
 
     /// Skip the "track was silent the whole time" alert (set from the alert's "Don't show again").

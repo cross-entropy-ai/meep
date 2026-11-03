@@ -112,3 +112,8 @@
 "The microphone recorded nothing. Check the input device." = "マイクに何も録音されませんでした。入力デバイスを確認してください。";
 "System audio recorded nothing." = "システムオーディオに何も録音されませんでした。";
 "No microphone access, and system audio recording is off: there is nothing to record." = "マイクへのアクセスがなく、システムオーディオの録音もオフです。録音するものがありません。";
+"Check Automatically" = "自動的に確認";
+"Daily" = "毎日";
+"Weekly" = "毎週";
+"Monthly" = "毎月";
+"Update Available: %@" = "アップデートがあります: %@";
