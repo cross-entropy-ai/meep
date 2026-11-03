@@ -58,7 +58,6 @@ struct Session: Codable {
     var autoLevel: Bool
     var micVoiceProcessing = false
     var micDevice: String?
-    var alignment = "all tracks start at session start; no offsets needed"
     var interruptions: [Interruption] = []
     var tracks = Tracks()
     var warnings: [String] = []
