@@ -55,7 +55,8 @@
 "Recordings Folder" = "錄音儲存位置";
 "Command Line" = "命令列";
 "Run After Saving" = "儲存後執行";
-"A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEEP_DIR. Output goes to raw/after-save.log." = "每次錄音儲存後執行的 shell 命令。錄音資料夾作為 $1 傳入，也在 $MEEP_DIR 裡。輸出寫入 raw/after-save.log。";
+"A shell command run after each recording is saved. Meep adds the recording folder to the end of the command (it is also in $1 and $MEEP_DIR), so don't name it again. Output goes to raw/after-save.log." = "每次錄音儲存後執行的 shell 命令。Meep 會把錄音資料夾加在命令末尾（也在 $1 和 $MEEP_DIR 裡），命令裡不要再寫一次。輸出寫入 raw/after-save.log。";
+"Examples: transcribe, summarize with an agent" = "範例：轉寫、用 agent 摘要";
 "Copy: " = "拷貝：";
 "Version" = "版本";
 "Privacy Policy" = "隱私權政策";

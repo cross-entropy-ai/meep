@@ -551,6 +551,10 @@ struct AgentPreferencesView: View {
     @AppStorage(AppSettings.Key.afterSaveCommand) private var afterSaveCommand = AppSettings.Default.afterSaveCommand
 
     static let urls = ["meep://start", "meep://stop", "meep://preferences"]
+    /// Run After Saving recipes, kept in the README so they can change without an app release.
+    static let recipesURL = URL(string: "https://github.com/cross-entropy-ai/meep#recipes")!
+    /// Meep appends the folder, so the example does not name it.
+    static let afterSaveExample = #"/opt/homebrew/bin/moop -s meeting -o "$1/transcript.txt""#
     private var helpCommand: String { "\"\(Bundle.main.executableURL?.path ?? "Meep")\" --help" }
 
     var body: some View {
@@ -567,15 +571,19 @@ struct AgentPreferencesView: View {
 
             Section {
                 TextField(tr("Run After Saving"), text: $afterSaveCommand,
-                          prompt: Text(verbatim: "~/bin/transcribe"))
+                          prompt: Text(verbatim: Self.afterSaveExample))
                     .labelsHidden()
                     .font(.system(.body, design: .monospaced))
             } header: {
                 Text(tr("Run After Saving"))
             } footer: {
-                Text(tr("A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEEP_DIR. Output goes to raw/after-save.log."))
-                    .font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(tr("A shell command run after each recording is saved. Meep adds the recording folder to the end of the command (it is also in $1 and $MEEP_DIR), so don't name it again. Output goes to raw/after-save.log."))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Link(tr("Examples: transcribe, summarize with an agent"), destination: Self.recipesURL)
+                }
+                .font(.caption)
             }
         }
         .formStyle(.grouped)

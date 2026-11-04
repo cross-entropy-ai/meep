@@ -55,7 +55,8 @@
 "Recordings Folder" = "録音の保存先";
 "Command Line" = "コマンドライン";
 "Run After Saving" = "保存後に実行";
-"A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEEP_DIR. Output goes to raw/after-save.log." = "録音を保存するたびに実行するシェルコマンド。録音フォルダは $1 と $MEEP_DIR で渡されます。出力は raw/after-save.log に書き込まれます。";
+"A shell command run after each recording is saved. Meep adds the recording folder to the end of the command (it is also in $1 and $MEEP_DIR), so don't name it again. Output goes to raw/after-save.log." = "録音を保存するたびに実行するシェルコマンド。Meep はコマンドの末尾に録音フォルダを追加します（$1 と $MEEP_DIR にも入っています）。コマンド内で改めて指定しないでください。出力は raw/after-save.log に書き込まれます。";
+"Examples: transcribe, summarize with an agent" = "例：文字起こし、エージェントで要約";
 "Copy: " = "コピー：";
 "Version" = "バージョン";
 "Privacy Policy" = "プライバシーポリシー";

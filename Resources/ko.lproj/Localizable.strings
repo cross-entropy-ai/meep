@@ -55,7 +55,8 @@
 "Recordings Folder" = "녹음 저장 위치";
 "Command Line" = "명령줄";
 "Run After Saving" = "저장 후 실행";
-"A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEEP_DIR. Output goes to raw/after-save.log." = "녹음이 저장될 때마다 실행되는 셸 명령입니다. 녹음 폴더가 $1과 $MEEP_DIR로 전달됩니다. 출력은 raw/after-save.log에 기록됩니다.";
+"A shell command run after each recording is saved. Meep adds the recording folder to the end of the command (it is also in $1 and $MEEP_DIR), so don't name it again. Output goes to raw/after-save.log." = "녹음이 저장될 때마다 실행되는 셸 명령입니다. Meep이 명령 끝에 녹음 폴더를 붙입니다($1과 $MEEP_DIR에도 있음). 명령에 다시 쓰지 마세요. 출력은 raw/after-save.log에 기록됩니다.";
+"Examples: transcribe, summarize with an agent" = "예시: 받아쓰기, 에이전트로 요약";
 "Copy: " = "복사: ";
 "Version" = "버전";
 "Privacy Policy" = "개인정보 처리방침";

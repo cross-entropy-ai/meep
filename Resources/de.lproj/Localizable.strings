@@ -55,7 +55,8 @@
 "Recordings Folder" = "Aufnahmeordner";
 "Command Line" = "Befehlszeile";
 "Run After Saving" = "Nach dem Sichern ausführen";
-"A shell command run after each recording is saved. It gets the recording folder as $1 and in $MEEP_DIR. Output goes to raw/after-save.log." = "Ein Shell-Befehl, der nach jeder gesicherten Aufnahme ausgeführt wird. Er erhält den Aufnahmeordner als $1 und in $MEEP_DIR. Die Ausgabe landet in raw/after-save.log.";
+"A shell command run after each recording is saved. Meep adds the recording folder to the end of the command (it is also in $1 and $MEEP_DIR), so don't name it again. Output goes to raw/after-save.log." = "Ein Shell-Befehl, der nach jeder gesicherten Aufnahme ausgeführt wird. Meep hängt den Aufnahmeordner an das Ende des Befehls an (er steht auch in $1 und $MEEP_DIR), also nicht noch einmal angeben. Die Ausgabe landet in raw/after-save.log.";
+"Examples: transcribe, summarize with an agent" = "Beispiele: transkribieren, mit einem Agenten zusammenfassen";
 "Copy: " = "Kopieren: ";
 "Version" = "Version";
 "Privacy Policy" = "Datenschutzerklärung";
