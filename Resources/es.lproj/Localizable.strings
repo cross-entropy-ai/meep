@@ -55,8 +55,8 @@
 "Recordings Folder" = "Carpeta de grabaciones";
 "Command Line" = "Línea de comandos";
 "Run After Saving" = "Ejecutar tras guardar";
-"A shell command run after each recording is saved. Meep adds the recording folder to the end of the command (it is also in $1 and $MEEP_DIR), so don't name it again. Output goes to raw/after-save.log." = "Un comando de shell que se ejecuta tras guardar cada grabación. Meep añade la carpeta de la grabación al final del comando (también está en $1 y $MEEP_DIR), así que no la vuelvas a indicar. La salida va a raw/after-save.log.";
-"Examples: transcribe, summarize with an agent" = "Ejemplos: transcribir, resumir con un agente";
+"A shell command run after each recording is saved." = "Comando de shell tras guardar cada grabación.";
+"Show Examples" = "Ver ejemplos";
 "Copy: " = "Copiar: ";
 "Version" = "Versión";
 "Privacy Policy" = "Política de privacidad";

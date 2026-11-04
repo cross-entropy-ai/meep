@@ -551,8 +551,8 @@ struct AgentPreferencesView: View {
     @AppStorage(AppSettings.Key.afterSaveCommand) private var afterSaveCommand = AppSettings.Default.afterSaveCommand
 
     static let urls = ["meep://start", "meep://stop", "meep://preferences"]
-    /// Run After Saving recipes, kept in the README so they can change without an app release.
-    static let recipesURL = URL(string: "https://github.com/cross-entropy-ai/meep#recipes")!
+    /// Run After Saving recipes, kept in docs/recipes.md so they can change without an app release.
+    static let recipesURL = URL(string: "https://github.com/cross-entropy-ai/meep/blob/main/docs/recipes.md")!
     /// Meep appends the folder, so the example does not name it.
     static let afterSaveExample = #"/opt/homebrew/bin/moop -s meeting -o "$1/transcript.txt""#
     private var helpCommand: String { "\"\(Bundle.main.executableURL?.path ?? "Meep")\" --help" }
@@ -577,11 +577,17 @@ struct AgentPreferencesView: View {
             } header: {
                 Text(tr("Run After Saving"))
             } footer: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(tr("A shell command run after each recording is saved. Meep adds the recording folder to the end of the command (it is also in $1 and $MEEP_DIR), so don't name it again. Output goes to raw/after-save.log."))
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(tr("A shell command run after each recording is saved."))
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Link(tr("Examples: transcribe, summarize with an agent"), destination: Self.recipesURL)
+                    Link(destination: Self.recipesURL) {
+                        HStack(spacing: 3) {
+                            Text(tr("Show Examples"))
+                            Image(systemName: "arrow.up.right.square")
+                        }
+                    }
+                    .pointerStyle(.link)
+                    .help(Self.recipesURL.absoluteString)
                 }
                 .font(.caption)
             }

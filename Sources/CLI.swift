@@ -511,7 +511,7 @@ enum HelpText {
           Preferences › Agent › Run After Saving: a shell command run after each recording is saved.
           Meep adds the recording folder to the end of the command (it is also $1 and $MEEP_DIR),
           so don't name it again. Output: raw/after-save.log.
-          Recipes (transcribe, summarize with an agent): https://github.com/cross-entropy-ai/meep#recipes
+          Recipes (transcribe, summarize with an agent): https://github.com/cross-entropy-ai/meep/blob/main/docs/recipes.md
           raw/after-save.json: {"status": "running|done|failed", "exit_status", ...}.
           Runs via zsh -lc: ~/.zprofile is read, ~/.zshrc is not (set PATH there or use full paths).
 
