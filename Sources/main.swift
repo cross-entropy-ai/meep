@@ -103,7 +103,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         quitItem = NSMenuItem(title: "", action: #selector(quit), keyEquivalent: "q")
         menu.addItem(quitItem)
+        menu.delegate = self
         statusItem.menu = menu
+        appState.onPermissionChange = { [weak self] in self?.updateUI() }
         appState.onInputDeviceChange = { [weak self] in self?.capture.session?.inputDeviceSettingChanged() }
         appState.onChange = { [weak self] in
             self?.updateUI()
@@ -242,8 +244,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let micAllowed = await micPermission()
             if AppSettings.recordSystemAudio { await systemAudioPermission() }
             var failure: String?
-            if !micAllowed && !AppSettings.recordSystemAudio {
-                failure = tr("No microphone access, and system audio recording is off: there is nothing to record.")
+            if !micAllowed {
+                failure = tr("Meep needs microphone access to record. Allow Meep in System Settings › Privacy & Security › Microphone.")
             } else {
                 do {
                     let s = try RecordingSession()
@@ -268,10 +270,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else if let failure {
                 alert(tr("Can't start recording"), failure,
                       settingsURL: micAllowed ? nil : Permissions.microphoneSettingsURL.absoluteString)
-            } else if !micAllowed {
-                alert(tr("No microphone access"),
-                      tr("Allow Meep in System Settings › Privacy & Security › Microphone. This recording captures system audio only."),
-                      settingsURL: Permissions.microphoneSettingsURL.absoluteString)
             }
         }
     }
@@ -389,7 +387,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.toolTip = "Meep: " + tr("recording") + " \(elapsed)"
         case .idle, .starting:
             toggleItem.title = tr("Start Recording")
-            toggleItem.isEnabled = true
+            // The microphone is required. While undecided, starting asks for it.
+            let micDenied = Permissions.microphone == .denied
+            toggleItem.isEnabled = !micDenied
             button.toolTip = "Meep"
             if saving > 0 {
                 icon = MenuBarIcons.saving
@@ -401,6 +401,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 icon = MenuBarIcons.saving
                 label = percent
                 healthItem.title = tr("Finishing an unfinished recording… %@", percent)
+                healthItem.isHidden = false
+            } else if micDenied {
+                healthItem.title = tr("No microphone access")
                 healthItem.isHidden = false
             }
         }
@@ -515,3 +518,8 @@ let delegate = AppDelegate()
 app.delegate = delegate
 app.setActivationPolicy(.accessory)
 app.run()
+
+extension AppDelegate: NSMenuDelegate {
+    /// Microphone access may have changed in System Settings since the menu was last built.
+    func menuWillOpen(_ menu: NSMenu) { updateUI() }
+}

@@ -22,6 +22,9 @@ final class AppState {
     /// Sparkle (started by AppDelegate).
     let updates = Updates()
 
+    /// Called when microphone access changes (the menu's Start Recording depends on it).
+    @ObservationIgnored var onPermissionChange: () -> Void = {}
+
     /// Called when a setting that affects the menu bar changes.
     @ObservationIgnored var onChange: () -> Void = {}
 
@@ -40,6 +43,7 @@ final class AppState {
     var recordsDefaultInput = true
     var micPermission = Permissions.microphone
     var systemAudioPermission = Permissions.systemAudio
+    @ObservationIgnored private var permissionTimer: Timer?
     @ObservationIgnored private var deviceListener: HardwareListener?
     @ObservationIgnored private var activeObserver: Any?
 
@@ -47,7 +51,9 @@ final class AppState {
         let defaultInput = try? defaultDevice(output: false)
         defaultInputName = defaultInput.flatMap(deviceName)
         inputDevices = listInputDevices()
-        micPermission = Permissions.microphone
+        let mic = Permissions.microphone
+        if mic != micPermission { onPermissionChange() }
+        micPermission = mic
         systemAudioPermission = Permissions.systemAudio
         let target = preferredInputDevice()
         recordsDefaultInput = target == defaultInput
@@ -112,6 +118,15 @@ final class AppState {
     /// turns on the mic indicator, so this runs only then, and only with mic access.
     func startMeter() {
         meterWanted = true
+        // System Settings sends no notice when access changes, and the user may change it there
+        // without switching back. Re-check once a second while the tab is shown.
+        if permissionTimer == nil {
+            let t = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.checkPermissions() }
+            }
+            RunLoop.main.add(t, forMode: .common)
+            permissionTimer = t
+        }
         stopMeterDevice()
         guard micPermission == .authorized, let dev = preferredInputDevice(),
               let m = InputLevelMeter(device: dev) else { return }
@@ -125,6 +140,7 @@ final class AppState {
 
     func stopMeter() {
         meterWanted = false
+        permissionTimer?.invalidate(); permissionTimer = nil
         stopMeterDevice()
     }
 
@@ -143,6 +159,13 @@ final class AppState {
         // invalidates the views that read it.
         let next = max(target, inputLevel - 0.05)
         if next != inputLevel { inputLevel = next }
+    }
+
+    /// Refreshes only when an access status changed: cheap enough to run every second.
+    private func checkPermissions() {
+        if Permissions.microphone != micPermission || Permissions.systemAudio != systemAudioPermission {
+            refreshSources()
+        }
     }
 
     /// Keeps the sources current: default input changes, and permissions changed in System
@@ -384,7 +407,8 @@ struct GeneralPreferencesView: View {
 
 // MARK: - Audio
 
-/// Per source (microphone, system audio): access and what is recorded; then post-processing.
+/// Per source (microphone, system audio): what is recorded, and access when it is missing;
+/// then post-processing.
 struct AudioPreferencesView: View {
     let state: AppState
     @AppStorage(AppSettings.Key.language) private var language = AppLanguage.system.rawValue
@@ -396,7 +420,9 @@ struct AudioPreferencesView: View {
     var body: some View {
         Form {
             Section(tr("Microphone")) {
-                permissionRow(tr("Access"), status: state.micPermission, request: state.requestMicrophone)
+                if state.micPermission != .authorized {  // shown only when it needs action
+                    permissionRow(tr("Access"), status: state.micPermission, request: state.requestMicrophone)
+                }
                 Picker(tr("Input Device"), selection: Binding(
                     get: { state.inputDeviceUID }, set: { state.selectInputDevice($0) })) {
                     Text(state.defaultInputName.map { tr("System Default (%@)", $0) } ?? tr("System Default"))
@@ -410,18 +436,23 @@ struct AudioPreferencesView: View {
                             .tag(state.inputDeviceUID)
                     }
                 }
+                .disabled(state.micPermission == .denied)
                 if state.micPermission == .authorized {
                     InputLevelRow(state: state)  // its own view: only it redraws as the level moves
                 }
             }
 
             Section(tr("System Audio")) {
-                permissionRow(tr("Access"), status: state.systemAudioPermission, request: state.requestSystemAudio)
+                // Shown whenever it needs action, also with Record off: Record is disabled while
+                // access is denied, and this row says why.
+                if state.systemAudioPermission != .authorized {
+                    permissionRow(tr("Access"), status: state.systemAudioPermission, request: state.requestSystemAudio)
+                }
                 Toggle(isOn: $recordSystemAudio) {
                     Text(tr("Record"))
                     if state.isRecording { Text(tr("Can't change while recording.")) }  // rendered as a subtitle
                 }
-                .disabled(state.isRecording)
+                .disabled(state.isRecording || state.systemAudioPermission == .denied)
             }
 
             Section {
@@ -524,10 +555,7 @@ struct AudioPreferencesView: View {
         LabeledContent(title) {
             switch status {
             case .authorized:
-                HStack(spacing: 4) {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                    Text(tr("Allowed")).foregroundStyle(.secondary)
-                }
+                EmptyView()  // callers hide the row
             case .notDetermined:
                 Button(tr("Allow Access"), action: request)
             case .denied:

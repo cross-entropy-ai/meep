@@ -7,7 +7,7 @@
 "Finished unfinished recordings" = "Grabaciones pendientes finalizadas";
 "These recordings were not finished last time (the app quit or the Mac shut down). They are processed and saved now:" = "Estas grabaciones no se terminaron la última vez (la app se cerró o el Mac se apagó). Ya se han procesado y guardado:";
 "No microphone access" = "Sin acceso al micrófono";
-"Allow Meep in System Settings › Privacy & Security › Microphone. This recording captures system audio only." = "Permite Meep en Ajustes del Sistema › Privacidad y seguridad › Micrófono. Esta grabación solo captura el audio del sistema.";
+"Meep needs microphone access to record. Allow Meep in System Settings › Privacy & Security › Microphone." = "Meep necesita acceso al micrófono para grabar. Permite Meep en Ajustes del Sistema › Privacidad y seguridad › Micrófono.";
 "Can't start recording" = "No se puede iniciar la grabación";
 "Recording saved with warnings" = "Grabación guardada con avisos";
 "Open Recordings Folder" = "Abrir carpeta de grabaciones";
@@ -68,7 +68,6 @@
 "Apple Voice Processing" = "Procesamiento de voz de Apple";
 "Microphone" = "Micrófono";
 "System Audio" = "Audio del sistema";
-"Allowed" = "Permitido";
 "Not Allowed" = "No permitido";
 "Allow Access" = "Permitir acceso";
 "Audio" = "Audio";
@@ -103,7 +102,6 @@
 "Can't save to %@: no write permission." = "No se puede guardar en %@: sin permiso de escritura.";
 "The microphone recorded nothing. Check the input device." = "El micrófono no grabó nada. Revisa el dispositivo de entrada.";
 "System audio recorded nothing." = "El audio del sistema no grabó nada.";
-"No microphone access, and system audio recording is off: there is nothing to record." = "Sin acceso al micrófono y la grabación del audio del sistema está desactivada: no hay nada que grabar.";
 "Check Automatically" = "Comprobar automáticamente";
 "Daily" = "A diario";
 "Weekly" = "Semanalmente";

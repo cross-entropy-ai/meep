@@ -7,7 +7,7 @@
 "Finished unfinished recordings" = "완료되지 않은 녹음을 처리했습니다";
 "These recordings were not finished last time (the app quit or the Mac shut down). They are processed and saved now:" = "다음 녹음은 지난번에 처리가 완료되지 않았습니다(앱 종료 또는 Mac 종료). 지금 처리하여 저장했습니다:";
 "No microphone access" = "마이크 접근 권한 없음";
-"Allow Meep in System Settings › Privacy & Security › Microphone. This recording captures system audio only." = "시스템 설정 › 개인정보 보호 및 보안 › 마이크에서 Meep를 허용하세요. 이번 녹음은 시스템 오디오만 녹음합니다.";
+"Meep needs microphone access to record. Allow Meep in System Settings › Privacy & Security › Microphone." = "녹음하려면 마이크 접근 권한이 필요합니다. 시스템 설정 › 개인정보 보호 및 보안 › 마이크에서 Meep를 허용하세요.";
 "Can't start recording" = "녹음을 시작할 수 없음";
 "Recording saved with warnings" = "녹음이 저장되었지만 경고가 있습니다";
 "Open Recordings Folder" = "녹음 폴더 열기";
@@ -68,7 +68,6 @@
 "Apple Voice Processing" = "Apple 음성 처리";
 "Microphone" = "마이크";
 "System Audio" = "시스템 오디오";
-"Allowed" = "허용됨";
 "Not Allowed" = "허용 안 됨";
 "Allow Access" = "접근 허용";
 "Audio" = "오디오";
@@ -103,7 +102,6 @@
 "Can't save to %@: no write permission." = "%@에 저장할 수 없습니다: 쓰기 권한이 없습니다.";
 "The microphone recorded nothing. Check the input device." = "마이크에 아무것도 녹음되지 않았습니다. 입력 기기를 확인하세요.";
 "System audio recorded nothing." = "시스템 오디오에 아무것도 녹음되지 않았습니다.";
-"No microphone access, and system audio recording is off: there is nothing to record." = "마이크 접근 권한이 없고 시스템 오디오 녹음도 꺼져 있어 녹음할 내용이 없습니다.";
 "Check Automatically" = "자동으로 확인";
 "Daily" = "매일";
 "Weekly" = "매주";

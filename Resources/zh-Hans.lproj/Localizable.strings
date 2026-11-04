@@ -7,7 +7,7 @@
 "Finished unfinished recordings" = "已处理完未完成的录音";
 "These recordings were not finished last time (the app quit or the Mac shut down). They are processed and saved now:" = "以下录音上次没有处理完（程序退出或电脑关机），现已处理并保存：";
 "No microphone access" = "没有麦克风权限";
-"Allow Meep in System Settings › Privacy & Security › Microphone. This recording captures system audio only." = "请到 系统设置 › 隐私与安全性 › 麦克风 中允许 Meep。本次只录系统声音。";
+"Meep needs microphone access to record. Allow Meep in System Settings › Privacy & Security › Microphone." = "录音需要麦克风权限。请到 系统设置 › 隐私与安全性 › 麦克风 中允许 Meep。";
 "Can't start recording" = "无法开始录制";
 "Recording saved with warnings" = "录制已保存，但有提示";
 "Open Recordings Folder" = "打开录音文件夹";
@@ -68,7 +68,6 @@
 "Apple Voice Processing" = "Apple 语音处理";
 "Microphone" = "麦克风";
 "System Audio" = "系统声音";
-"Allowed" = "已允许";
 "Not Allowed" = "未允许";
 "Allow Access" = "允许访问";
 "Audio" = "音频";
@@ -103,7 +102,6 @@
 "Can't save to %@: no write permission." = "无法保存到 %@：没有写入权限。";
 "The microphone recorded nothing. Check the input device." = "麦克风什么也没录到，请检查输入设备。";
 "System audio recorded nothing." = "系统声音什么也没录到。";
-"No microphone access, and system audio recording is off: there is nothing to record." = "没有麦克风权限，系统声音录制也已关闭：没有可录制的内容。";
 "Check Automatically" = "自动检查";
 "Daily" = "每天";
 "Weekly" = "每周";

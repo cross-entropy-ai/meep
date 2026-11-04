@@ -7,7 +7,7 @@
 "Finished unfinished recordings" = "Finished unfinished recordings";
 "These recordings were not finished last time (the app quit or the Mac shut down). They are processed and saved now:" = "These recordings were not finished last time (the app quit or the Mac shut down). They are processed and saved now:";
 "No microphone access" = "No microphone access";
-"Allow Meep in System Settings › Privacy & Security › Microphone. This recording captures system audio only." = "Allow Meep in System Settings › Privacy & Security › Microphone. This recording captures system audio only.";
+"Meep needs microphone access to record. Allow Meep in System Settings › Privacy & Security › Microphone." = "Meep needs microphone access to record. Allow Meep in System Settings › Privacy & Security › Microphone.";
 "Can't start recording" = "Can't start recording";
 "Recording saved with warnings" = "Recording saved with warnings";
 "Open Recordings Folder" = "Open Recordings Folder";
@@ -68,7 +68,6 @@
 "Apple Voice Processing" = "Apple Voice Processing";
 "Microphone" = "Microphone";
 "System Audio" = "System Audio";
-"Allowed" = "Allowed";
 "Not Allowed" = "Not Allowed";
 "Allow Access" = "Allow Access";
 "Audio" = "Audio";
@@ -103,7 +102,6 @@
 "Can't save to %@: no write permission." = "Can't save to %@: no write permission.";
 "The microphone recorded nothing. Check the input device." = "The microphone recorded nothing. Check the input device.";
 "System audio recorded nothing." = "System audio recorded nothing.";
-"No microphone access, and system audio recording is off: there is nothing to record." = "No microphone access, and system audio recording is off: there is nothing to record.";
 "Check Automatically" = "Check Automatically";
 "Daily" = "Daily";
 "Weekly" = "Weekly";

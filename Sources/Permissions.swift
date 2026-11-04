@@ -14,7 +14,14 @@ enum Permissions {
     static let systemAudioSettingsURL =
         URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture")!
 
+    /// Read through TCC when possible: AVCaptureDevice keeps reporting a denial for the life of
+    /// the process, even after access is allowed in System Settings.
     static var microphone: PermissionStatus {
+        let tcc = tccStatus("kTCCServiceMicrophone" as CFString)
+        return tcc == .unknown ? microphoneAV : tcc
+    }
+
+    private static var microphoneAV: PermissionStatus {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .authorized: .authorized
         case .notDetermined: .notDetermined
@@ -39,7 +46,9 @@ enum Permissions {
     private static let request: RequestFn? =
         dlsym(tcc, "TCCAccessRequest").map { unsafeBitCast($0, to: RequestFn.self) }
 
-    static var systemAudio: PermissionStatus {
+    static var systemAudio: PermissionStatus { tccStatus(service) }
+
+    private static func tccStatus(_ service: CFString) -> PermissionStatus {
         guard let preflight else { return .unknown }
         switch preflight(service, nil) {
         case 0: return .authorized

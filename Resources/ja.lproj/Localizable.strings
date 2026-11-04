@@ -7,7 +7,7 @@
 "Finished unfinished recordings" = "未完了の録音を処理しました";
 "These recordings were not finished last time (the app quit or the Mac shut down). They are processed and saved now:" = "以下の録音は前回処理が完了していませんでした（アプリの終了または Mac のシャットダウン）。処理して保存しました：";
 "No microphone access" = "マイクへのアクセスがありません";
-"Allow Meep in System Settings › Privacy & Security › Microphone. This recording captures system audio only." = "「システム設定 › プライバシーとセキュリティ › マイク」で Meep を許可してください。今回はシステムオーディオのみ録音します。";
+"Meep needs microphone access to record. Allow Meep in System Settings › Privacy & Security › Microphone." = "録音にはマイクへのアクセスが必要です。「システム設定 › プライバシーとセキュリティ › マイク」で Meep を許可してください。";
 "Can't start recording" = "録音を開始できません";
 "Recording saved with warnings" = "録音を保存しましたが、警告があります";
 "Open Recordings Folder" = "録音フォルダを開く";
@@ -68,7 +68,6 @@
 "Apple Voice Processing" = "Apple 音声処理";
 "Microphone" = "マイク";
 "System Audio" = "システムオーディオ";
-"Allowed" = "許可済み";
 "Not Allowed" = "未許可";
 "Allow Access" = "アクセスを許可";
 "Audio" = "オーディオ";
@@ -103,7 +102,6 @@
 "Can't save to %@: no write permission." = "%@ に保存できません：書き込み権限がありません。";
 "The microphone recorded nothing. Check the input device." = "マイクに何も録音されませんでした。入力デバイスを確認してください。";
 "System audio recorded nothing." = "システムオーディオに何も録音されませんでした。";
-"No microphone access, and system audio recording is off: there is nothing to record." = "マイクへのアクセスがなく、システムオーディオの録音もオフです。録音するものがありません。";
 "Check Automatically" = "自動的に確認";
 "Daily" = "毎日";
 "Weekly" = "毎週";
